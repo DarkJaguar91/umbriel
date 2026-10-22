@@ -497,7 +497,21 @@ namespace umbriel {
 
       const Config::Input& input = config().input;
       const Config::Input::Device* override = input.findDevice(device->name != nullptr ? device->name : "");
+
       const bool isTouchpad = libinput_device_config_tap_get_finger_count(libinputDevice) > 0;
+      const bool enabled =
+          override != nullptr && override->enabled ? *override->enabled : !isTouchpad || input.touchpad.enabled;
+      if ((libinput_device_config_send_events_get_modes(libinputDevice) & LIBINPUT_CONFIG_SEND_EVENTS_DISABLED) != 0) {
+        libinput_device_config_send_events_set_mode(
+            libinputDevice, enabled ? LIBINPUT_CONFIG_SEND_EVENTS_ENABLED : LIBINPUT_CONFIG_SEND_EVENTS_DISABLED
+        );
+      } else if (!enabled) {
+        kLog.warn("input: '{}' cannot be disabled", deviceName(device));
+      }
+      if (!enabled) {
+        return;
+      }
+
       if (isTouchpad) {
         const std::optional<bool>& tap = override != nullptr && override->tap ? override->tap : input.touchpad.tap;
         const auto tapState =

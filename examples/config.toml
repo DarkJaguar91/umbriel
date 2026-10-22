@@ -262,6 +262,7 @@ default_extent_fraction = 0.5
 # [appearance.tab_bar]
 # style = "titles"         # "indicator" draws thin slots without titles
 # height = 24
+# gap = -1                 # space between bar and window; -1 follows layout.gap
 # font = "sans 10"
 # visible = true           # false hides every bar; tabs keep working
 # hide_when_single = false

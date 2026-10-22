@@ -180,6 +180,8 @@ namespace umbriel {
       bool middleClickCloses = false;
       // Derived from [appearance.tab_bar]; set by resolve function. The bar's space is part of the layout.
       int barHeight = 24;
+      // [appearance.tab_bar] gap, or the layout gap when that is -1.
+      int barGap = 8;
       TabBarPosition barPosition = TabBarPosition::Top;
       bool hideWhenSingle = false;
       // Whether bars are drawn unless a group says otherwise.
@@ -725,6 +727,8 @@ namespace umbriel {
         int padding = 8;
         // Space between neighbouring slots.
         int tabGap = 2;
+        // Space between the bar and its window; -1 follows the layout gap.
+        int gap = -1;
         // -1 follows corner_radius.
         int cornerRadius = -1;
         // {title}, {app_id} and {index} are replaced; a window without a title shows its app id instead.
@@ -1070,6 +1074,7 @@ namespace umbriel {
       } keyboard;
 
       struct Touchpad {
+        bool enabled = true;
         std::optional<bool> tap = true;
         std::optional<bool> tapAndDrag;
         std::optional<DragLock> dragLock;
@@ -1162,6 +1167,7 @@ namespace umbriel {
         std::optional<std::string> model;
         std::optional<int> repeatRate;
         std::optional<int> repeatDelay;
+        std::optional<bool> enabled;
         std::optional<bool> tap;
         std::optional<bool> tapAndDrag;
         std::optional<DragLock> dragLock;

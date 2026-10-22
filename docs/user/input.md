@@ -173,6 +173,7 @@ surface layouts.
 
 ```toml
 [input.touchpad]
+# enabled = true
 tap = true
 # tap_and_drag = false
 # drag_lock = "sticky"
@@ -192,6 +193,7 @@ settings are reported in the log.
 
 | Key | Description |
 | --- | --- |
+| `enabled` | Enable or disable touchpad input. |
 | `tap` | Enable tap-to-click. |
 | `tap_and_drag` | Keep dragging after a tap when the finger stays down and moves. |
 | `drag_lock` | Keep dragging after the finger lifts during a tap-and-drag: `"off"` disables it, `"timeout"` ends the drag shortly after the finger lifts, `"sticky"` holds the drag until the next tap. |
@@ -272,11 +274,15 @@ click_method = "clickfinger"
 name = "Acme Gaming Mouse"
 accel_profile = "flat"
 sensitivity = 0.0
+
+[[input.device]]
+name = "Acme Controller Touchpad"
+enabled = false
 ```
 
 Each rule inherits its keyboard, touchpad, or mouse class settings and replaces
-only the keys it contains. Duplicate rules for the same device name are
-rejected.
+only the keys it contains. `enabled = false` turns off a keyboard, touchpad, or
+mouse. Duplicate rules for the same device name are rejected.
 
 ### Tablet
 
