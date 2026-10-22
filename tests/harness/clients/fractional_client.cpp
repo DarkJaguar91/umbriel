@@ -11,6 +11,7 @@
 // <n>/120" for every presentation, so the last line is the layout's size rather than the size the client picked to
 // answer an unsized initial configure. Then it keeps the connection alive until the harness kills it.
 // Usage: fractional-client [title [default_width default_height [margin]]].
+// UNMAPPED_SUBSURFACE adds an unbuffered child at (-200, -200), as Firefox does.
 // HOLD_SIZE keeps the default dimensions while acknowledging configures, exposing compositor-only resize scaling.
 
 #include "fractional-scale-v1-client-protocol.h"
@@ -39,6 +40,7 @@ namespace {
   struct State {
     wl_display* display = nullptr;
     wl_compositor* compositor = nullptr;
+    wl_subcompositor* subcompositor = nullptr;
     wl_shm* shm = nullptr;
     xdg_wm_base* wmBase = nullptr;
     wp_viewporter* viewporter = nullptr;
@@ -313,6 +315,11 @@ namespace {
       wl_seat_add_listener(seat, &kSeatListener, &state);
     } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
       state.compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, 4));
+    } else if (
+        strcmp(interface, wl_subcompositor_interface.name) == 0 && std::getenv("UNMAPPED_SUBSURFACE") != nullptr
+    ) {
+      state.subcompositor =
+          static_cast<wl_subcompositor*>(wl_registry_bind(registry, name, &wl_subcompositor_interface, 1));
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
       state.shm = static_cast<wl_shm*>(wl_registry_bind(registry, name, &wl_shm_interface, 1));
     } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
@@ -378,6 +385,15 @@ int main(int argc, char** argv) {
   }
 
   state.surface = wl_compositor_create_surface(state.compositor);
+  if (std::getenv("UNMAPPED_SUBSURFACE") != nullptr) {
+    if (state.subcompositor == nullptr) {
+      std::println(stderr, "fractional-client: subcompositor unavailable");
+      return 1;
+    }
+    wl_surface* auxiliary = wl_compositor_create_surface(state.compositor);
+    wl_subsurface* subsurface = wl_subcompositor_get_subsurface(state.subcompositor, auxiliary, state.surface);
+    wl_subsurface_set_position(subsurface, -200, -200);
+  }
   state.viewport = wp_viewporter_get_viewport(state.viewporter, state.surface);
   wp_fractional_scale_v1* fractionalScale =
       wp_fractional_scale_manager_v1_get_fractional_scale(state.scaleManager, state.surface);

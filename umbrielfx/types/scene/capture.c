@@ -41,6 +41,14 @@ static size_t last_output_num = 0;
 
 static void
 _get_scene_node_extents(struct wlr_scene_node* node, int lx, int ly, int* x_min, int* y_min, int* x_max, int* y_max) {
+  // Unmapped auxiliary surfaces and clipped children do not contribute visible bounds.
+  if (!node->enabled) {
+    return;
+  }
+  if (node->type == WLR_SCENE_NODE_BUFFER && wlr_scene_buffer_from_node(node)->buffer == NULL) {
+    return;
+  }
+
   switch (node->type) {
   case WLR_SCENE_NODE_TREE:;
     struct wlr_scene_tree* scene_tree = wlr_scene_tree_from_node(node);
@@ -57,6 +65,9 @@ _get_scene_node_extents(struct wlr_scene_node* node, int lx, int ly, int* x_min,
   case WLR_SCENE_NODE_BUFFER:;
     struct wlr_box node_box = {.x = lx, .y = ly};
     scene_node_get_size(node, &node_box.width, &node_box.height);
+    if (node_box.width <= 0 || node_box.height <= 0) {
+      break;
+    }
 
     if (node_box.x < *x_min) {
       *x_min = node_box.x;

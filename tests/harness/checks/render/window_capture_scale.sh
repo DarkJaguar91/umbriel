@@ -2,6 +2,7 @@
 # harness: outputs=2
 # A persistent window capture must renegotiate physical buffer sizes after both
 # output scale changes and moves, while preserving native client pixel detail.
+# An unmapped auxiliary subsurface outside the window must never enlarge its capture.
 set -euo pipefail
 source "$UMBRIEL_HARNESS_LIB"
 
@@ -43,7 +44,7 @@ CONFIG
 }
 
 configure 2.5
-"$UMBRIEL_FRACTIONAL_CLIENT" window-capture-scale 322 202 > "$CLIENT_LOG" 2>&1 &
+UNMAPPED_SUBSURFACE=1 "$UMBRIEL_FRACTIONAL_CLIENT" window-capture-scale 322 202 > "$CLIENT_LOG" 2>&1 &
 client_pid=$!
 trap 'kill -CONT "$client_pid" 2>/dev/null || true' EXIT
 await_lines "$CLIENT_LOG" 'mapped .* scale 300/120' 1

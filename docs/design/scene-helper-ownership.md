@@ -12,6 +12,12 @@ own: `surface.c`, `subsurface_tree.c`, `xdg_shell.c`, `layer_shell_v1.c`,
 scene-node image capture helper in `capture.c` is also vendored and guarded:
 it creates and destroys a scene output, whose struct UmbrielFX extends. Its
 scale setter lets window captures follow the assigned output's render scale.
+Capture bounds include only enabled nodes with visible area and, for buffer
+nodes, an attached buffer. Firefox's `ForceToplevelCommit()` moves an
+unbuffered child outside its window to force GTK3 parent commits without
+repainting. This unmapped helper must not expand the capture rectangle and
+introduce black padding. The window capture scale harness check keeps such a
+child present across scale changes, output moves, and fullscreen.
 When updating wlroots, compare its capture helper for relevant fixes as well
 as the node helpers.
 
