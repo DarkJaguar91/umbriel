@@ -3406,9 +3406,16 @@ namespace umbriel {
 
     if (!modHeld) {
       if (const auto hit = m_server->ssdFrameAt(m_cursor->x, m_cursor->y)) {
-        const char* name = hit->part == SsdFramePart::Resize
-            ? wlr_xcursor_get_resize_name(static_cast<enum wlr_edges>(hit->edges))
-            : "default";
+        const char* name = "default";
+        if (hit->part == SsdFramePart::Resize) {
+          name = wlr_xcursor_get_resize_name(static_cast<enum wlr_edges>(hit->edges));
+        } else if (
+            !hit->view->blocked()
+            && (hit->part == SsdFramePart::Close
+                || (hit->part == SsdFramePart::Maximize && hit->view->ssdFrame()->maximizeEnabled()))
+        ) {
+          name = "pointer";
+        }
         setCompositorCursor(name != nullptr ? name : "default");
         return;
       }

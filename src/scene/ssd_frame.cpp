@@ -135,11 +135,18 @@ namespace umbriel {
   void SsdFrame::updateColors() {
     const auto& colors = config().colors.titleBar;
     float color[4];
-    premultiplied(color, m_focused ? colors.background : colors.backgroundUnfocused, m_alpha);
+    const auto& background = m_focused ? colors.background : colors.backgroundUnfocused;
+    premultiplied(color, background, m_alpha);
     wlr_scene_rect_set_color(m_background, color);
+    const float contrast =
+        background[0] * 0.2126F + background[1] * 0.7152F + background[2] * 0.0722F < 0.5F ? 1.0F : 0.0F;
     const auto button = [&](wlr_scene_rect* rect, const std::array<float, 4>& base, SsdFramePart part, bool enabled) {
       auto value = base;
       const float alpha = !enabled ? 0.35F : (m_hovered == part ? 1.0F : 0.85F);
+      if (enabled && m_hovered == part) {
+        for (size_t i = 0; i < 3; ++i)
+          value[i] += (contrast - value[i]) * 0.2F;
+      }
       if (enabled && m_pressed == part) {
         for (size_t i = 0; i < 3; ++i)
           value[i] *= 0.8F;
