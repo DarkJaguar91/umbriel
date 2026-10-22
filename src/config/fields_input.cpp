@@ -273,6 +273,7 @@ namespace umbriel {
           ),
       };
       static const Fields<In::Touchpad> touchpad{
+          boolean("enabled", &In::Touchpad::enabled),
           boolean("tap", &In::Touchpad::tap),
           boolean("tap_and_drag", &In::Touchpad::tapAndDrag),
           choice("drag_lock", &In::Touchpad::dragLock, dragLocks, Case::Fold),
@@ -366,6 +367,7 @@ namespace umbriel {
           text("model", &In::Device::model),
           integer("repeat_rate", 0, 1000, &In::Device::repeatRate),
           integer("repeat_delay", 0, 10000, &In::Device::repeatDelay),
+          boolean("enabled", &In::Device::enabled),
           boolean("tap", &In::Device::tap),
           boolean("tap_and_drag", &In::Device::tapAndDrag),
           choice("drag_lock", &In::Device::dragLock, dragLocks, Case::Fold),
