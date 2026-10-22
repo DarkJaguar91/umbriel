@@ -1182,13 +1182,24 @@ namespace umbriel {
 
   void Cursor::beginClientMove(View* view, wlr_seat_client* seatClient, uint32_t serial) {
     const std::optional<uint32_t> button = clientPointerGrabButton(view, seatClient, serial);
-    if (!button.has_value() || *button == 0 || !beginMove(view, *button)) {
+    if (!button.has_value()
+        || *button == 0
+        || !m_clientPointerPress
+        || m_clientPointerPress->button != *button
+        || m_clientPointerPress->serial != m_server->seat()->wlr()->pointer_state.grab_serial
+        || !beginMove(view, *button, true)) {
       return;
     }
+    auto& grab = std::get<MoveGrab>(m_grab);
+    grab.startX = m_clientPointerPress->x;
+    grab.startY = m_clientPointerPress->y;
     // xdg-shell transfers this device away from the client for an accepted
     // interactive operation. The notify variant also retires wlroots' implicit
     // button grab; m_grabButton keeps the raw release needed to finish ours.
     wlr_seat_pointer_notify_clear_focus(m_server->seat()->wlr());
+    // The client may already have crossed the threshold before requesting the move. Promote it now without another
+    // motion event, keeping the current pointer grip instead of jumping back to the press position.
+    processMotion(monotonicMsec(), m_cursor->x, m_cursor->y, false);
   }
 
   void Cursor::beginClientResize(View* view, wlr_seat_client* seatClient, uint32_t serial, uint32_t edges) {
@@ -1452,6 +1463,9 @@ namespace umbriel {
   }
 
   void Cursor::processButton(uint32_t timeMsec, uint32_t button, wl_pointer_button_state state) {
+    if (state == WL_POINTER_BUTTON_STATE_RELEASED && m_clientPointerPress && m_clientPointerPress->button == button) {
+      m_clientPointerPress.reset();
+    }
     noteActivity();
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
       m_server->notifyInputActivity();
@@ -1799,7 +1813,10 @@ namespace umbriel {
     }
 
     m_server->seat()->notifyPointerModifiers();
-    wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
+    const uint32_t serial = wlr_seat_pointer_notify_button(seat, timeMsec, button, state);
+    if (state == WL_POINTER_BUTTON_STATE_PRESSED && serial != 0 && seat->pointer_state.button_count == 1) {
+      m_clientPointerPress = ClientPointerPress{.button = button, .serial = serial, .x = m_cursor->x, .y = m_cursor->y};
+    }
     if (layer != nullptr) {
       if (!isXdgPopupSurface(surface)) {
         layer->focus();
@@ -2692,6 +2709,7 @@ namespace umbriel {
     grab.physics = grab.view->beginDragPhysics(grab.offsetX, grab.offsetY);
     grab.lastX = m_cursor->x;
     grab.lastY = m_cursor->y;
+    updateInteractiveCursor(grab.view);
   }
 
   void Cursor::updateDropTarget() {
@@ -3367,8 +3385,10 @@ namespace umbriel {
       setCompositorCursor(name != nullptr ? name : "default");
       return;
     }
-    if (std::holds_alternative<MoveGrab>(m_grab)) {
-      setCompositorCursor("grabbing");
+    if (const auto* grab = std::get_if<MoveGrab>(&m_grab)) {
+      if (!grab->pending) {
+        setCompositorCursor("grabbing");
+      }
       return;
     }
 

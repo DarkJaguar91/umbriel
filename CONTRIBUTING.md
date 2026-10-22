@@ -343,7 +343,7 @@ src/
   lock/       ext-session-lock surfaces
   xwayland/   Xwayland server, X11 window lifecycle, override-redirect windows
   workspace/  per-output workspaces and scratchpads
-  layout/     scrolling, dwindle, and master layouts, insert and drop targets
+  layout/     scrolling, dwindle, master, and floating layouts, insert and drop targets
   overview/   overview lifecycle and presentation
   scene/      blur, shadows, text, banners, and internal overlays
   config/     TOML parsing, resolution, reloads, and diagnostics

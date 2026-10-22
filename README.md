@@ -1,6 +1,6 @@
 # Umbriel
 
-Umbriel is a Wayland compositor designed for daily use, with scrolling, dwindle, and master layouts, per-output
+Umbriel is a Wayland compositor designed for daily use, with scrolling, dwindle, master, and floating layouts, per-output
 workspaces, window rules, blur, shadows, and fluid animations.
 
 It runs independently and can be paired with [Noctalia](https://github.com/noctalia-dev/noctalia), which provides a
@@ -42,8 +42,12 @@ To understand the values and philosophy guiding the project, read our [ethos](ht
 
 ## Features
 
-- Scrolling, dwindle, and master layouts with per-workspace selection, width presets, animated navigation, and
+- Scrolling, dwindle, master, and floating layouts with per-workspace selection, width presets, animated navigation, and
   mouse-driven resizing and tiled reordering
+- [Floating workspaces](docs/user/layout.md#floating-layout) with preferred window sizes, automatic placement,
+  cascading, and [edge and corner snapping](docs/user/input.md#settings)
+- Optional [title bars](docs/user/appearance.md#title-bar) with close and maximize buttons, plus modifier-free
+  moving and resizing
 - [Tab groups](docs/user/layout.md#tab-groups) that stack, move, and resize like any row in the scrolling layout,
   and tab whole areas in the master layout, with a clickable, scrollable, draggable tab bar that can be hidden
 - Independent workspaces per output, with dynamic or named workspaces, hotplug restoration, fractional scaling, and

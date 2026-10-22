@@ -39,6 +39,7 @@ namespace {
   enum class PressAction {
     None,
     Move,
+    MoveOnMotion,
     ResizeRight,
   };
 
@@ -80,6 +81,7 @@ namespace {
     std::optional<uint32_t> heldSerial;
     PressAction pressAction = PressAction::None;
     bool actionRequested = false;
+    std::optional<uint32_t> moveSerial;
     bool useTextInput = false;
     bool logModifiers = false;
     // Surface-local pointer position from the latest enter or motion.
@@ -257,13 +259,22 @@ namespace {
   // checks parse.
   void pointerMotion(void* data, wl_pointer*, uint32_t, wl_fixed_t sx, wl_fixed_t sy) {
     auto& state = *static_cast<State*>(data);
+    const bool moved = state.pointerX != wl_fixed_to_double(sx) || state.pointerY != wl_fixed_to_double(sy);
     state.pointerX = wl_fixed_to_double(sx);
     state.pointerY = wl_fixed_to_double(sy);
+    if (state.moveSerial && !state.actionRequested && moved) {
+      state.actionRequested = true;
+      xdg_toplevel_move(state.toplevel, state.seat, *state.moveSerial);
+      std::println("move-requested");
+    }
   }
 
   void pointerButton(void* data, wl_pointer*, uint32_t serial, uint32_t, uint32_t button, uint32_t buttonState) {
     auto& state = *static_cast<State*>(data);
     std::println("pointer-button code={} state={}", button, buttonStateName(buttonState));
+    if (button == kLeftButton && buttonState == WL_POINTER_BUTTON_STATE_RELEASED) {
+      state.moveSerial.reset();
+    }
     if (buttonState == WL_POINTER_BUTTON_STATE_PRESSED) {
       std::println("press-position x={:.0f} y={:.0f}", state.pointerX, state.pointerY);
     }
@@ -271,6 +282,10 @@ namespace {
         && !state.actionRequested
         && button == kLeftButton
         && buttonState == WL_POINTER_BUTTON_STATE_PRESSED) {
+      if (state.pressAction == PressAction::MoveOnMotion) {
+        state.moveSerial = serial;
+        return;
+      }
       state.actionRequested = true;
       if (state.pressAction == PressAction::Move) {
         xdg_toplevel_move(state.toplevel, state.seat, serial);
@@ -474,12 +489,12 @@ int main(int argc, char** argv) {
   // would hide events until exit.
   setvbuf(stdout, nullptr, _IOLBF, 0);
   if (argc > 3) {
-    std::println(stderr, "usage: {} [title] [move-on-press|resize-on-press]", argv[0]);
+    std::println(stderr, "usage: {} [title] [move-on-press|move-on-motion|resize-on-press]", argv[0]);
     return EXIT_FAILURE;
   }
   const char* title = argc > 1 ? argv[1] : "seat-log-client";
   const std::string_view mode = argc > 2 ? argv[2] : "";
-  if (!mode.empty() && mode != "move-on-press" && mode != "resize-on-press") {
+  if (!mode.empty() && mode != "move-on-press" && mode != "move-on-motion" && mode != "resize-on-press") {
     std::println(stderr, "seat-log-client: unknown mode '{}'", mode);
     return EXIT_FAILURE;
   }
@@ -493,6 +508,8 @@ int main(int argc, char** argv) {
   state.logModifiers = std::getenv("LOG_MODIFIERS") != nullptr;
   if (mode == "move-on-press") {
     state.pressAction = PressAction::Move;
+  } else if (mode == "move-on-motion") {
+    state.pressAction = PressAction::MoveOnMotion;
   } else if (mode == "resize-on-press") {
     state.pressAction = PressAction::ResizeRight;
   }

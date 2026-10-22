@@ -68,8 +68,7 @@ namespace umbriel {
       Output* dwellOutput = nullptr;
       uint32_t dwellEdges = 0;
       bool dwellReady = false;
-      // A tiled drag holds the window in the layout until the pointer clears
-      // the threshold. A floating drag is detached from the start.
+      // Tiled and title bar moves wait for the drag threshold before taking over presentation.
       bool pending = true;
       double startX = 0;
       double startY = 0;
@@ -425,6 +424,14 @@ namespace umbriel {
     GrabState m_grab;
     // Physical button that owns the current interactive pointer operation.
     uint32_t m_grabButton = 0;
+    // Origin of the client-delivered press, tied to the implicit grab's serial so delayed move requests share its slop.
+    struct ClientPointerPress {
+      uint32_t button;
+      uint32_t serial;
+      double x;
+      double y;
+    };
+    std::optional<ClientPointerPress> m_clientPointerPress;
     // Last layout output under the pointer; crossing heads updates seat focus like workspace switch.
     wlr_output* m_pointerOutput = nullptr;
     double m_wheelAccum[2]{};
