@@ -82,7 +82,7 @@ namespace umbriel {
     if (m_config == nullptr || !tabBarShown(*m_config, tabs, bar)) {
       return 0;
     }
-    return m_config->tabs.barHeight + m_config->gap;
+    return m_config->tabs.barHeight + m_config->tabs.barGap;
   }
 
   wlr_box Layout::tabbedBox(const wlr_box& box, size_t tabs, std::optional<bool> bar) const {

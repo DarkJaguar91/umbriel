@@ -54,6 +54,18 @@ UMBRIEL_TEST(globalLayoutUsesTheCallerOwnedConfig) {
   CHECK(firstLayout != secondLayout);
 }
 
+UMBRIEL_TEST(tabBarGapFollowsTheWorkspaceGapUnlessSet) {
+  Config config;
+  WorkspaceConfig wide;
+  wide.name = "wide";
+  wide.layout.gap = 30;
+  config.workspaceRules.push_back(std::move(wide));
+  CHECK_EQ(umbriel::resolveWorkspaceLayout(config, identity("DP-1"), "wide", 0).tabs.barGap, 30);
+
+  config.appearance.tabBar.gap = 0;
+  CHECK_EQ(umbriel::resolveWorkspaceLayout(config, identity("DP-1"), "wide", 0).tabs.barGap, 0);
+}
+
 UMBRIEL_TEST(workspaceOverridesApplyGlobalThenOutputSpecificRules) {
   Config config;
   config.layout.gap = 8;

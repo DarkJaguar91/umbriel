@@ -622,6 +622,7 @@ position = "bottom"
 height = 4
 font = "Inter Bold 9"
 tab_gap = 0
+gap = 3
 corner_radius = 1
 title_format = "{index}: {title}"
 title_align = "left"
@@ -662,6 +663,7 @@ default_column_display = "tabbed"
   CHECK_EQ(config.appearance.tabBar.height, 4);
   CHECK_EQ(config.appearance.tabBar.font, std::string{"Inter Bold 9"});
   CHECK_EQ(config.appearance.tabBar.tabGap, 0);
+  CHECK_EQ(config.appearance.tabBar.gap, 3);
   CHECK_EQ(config.appearance.tabBar.cornerRadius, 1);
   CHECK_EQ(config.appearance.tabBar.titleFormat, std::string{"{index}: {title}"});
   CHECK(config.appearance.tabBar.titleAlign == umbriel::TitleAlign::Left);
@@ -678,6 +680,7 @@ default_column_display = "tabbed"
   const umbriel::ResolvedLayoutConfig resolved = umbriel::resolveGlobalLayout(config);
   CHECK(resolved.tabs.defaultDisplay == umbriel::ColumnDisplay::Tabbed);
   CHECK_EQ(resolved.tabs.barHeight, 4);
+  CHECK_EQ(resolved.tabs.barGap, 3);
   CHECK(resolved.tabs.barPosition == umbriel::TabBarPosition::Bottom);
   CHECK(resolved.tabs.hideWhenSingle);
 }

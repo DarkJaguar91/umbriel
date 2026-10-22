@@ -153,6 +153,7 @@ namespace umbriel {
       if (overrides.tabs.middleClickCloses) {
         resolved.tabs.middleClickCloses = *overrides.tabs.middleClickCloses;
       }
+      resolved.tabs.barGap = config.appearance.tabBar.gap < 0 ? resolved.gap : config.appearance.tabBar.gap;
       const int borderWidth = config.appearance.totalBorderWidth();
       resolved.totalGap = resolved.gap + 2 * borderWidth;
       resolved.edgePad = resolved.gap + borderWidth;
@@ -480,6 +481,7 @@ namespace umbriel {
     resolved.tabs.barPosition = config.appearance.tabBar.position;
     resolved.tabs.hideWhenSingle = config.appearance.tabBar.hideWhenSingle;
     resolved.tabs.barVisible = config.appearance.tabBar.visible;
+    resolved.tabs.barGap = config.appearance.tabBar.gap < 0 ? resolved.gap : config.appearance.tabBar.gap;
     const int borderWidth = config.appearance.totalBorderWidth();
     resolved.totalGap = resolved.gap + 2 * borderWidth;
     resolved.edgePad = resolved.gap + borderWidth;
