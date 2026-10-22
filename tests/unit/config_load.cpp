@@ -2675,6 +2675,7 @@ sensitivity = 0.1
 scroll_factor = { horizontal = 0.8, vertical = 0.6 }
 disable_while_typing = true
 disable_on_external_mouse = true
+scroll_method = "edge"
 click_method = "button_areas"
 tap_button_map = "left_middle_right"
 
@@ -2703,6 +2704,7 @@ left_handed = false
 accel_profile = "flat"
 sensitivity = -0.5
 disable_while_typing = false
+scroll_method = "edge"
 click_method = "clickfinger"
 tap_button_map = "left_right_middle"
 
@@ -2740,6 +2742,7 @@ scroll_button_lock = false
   CHECK(input.touchpad.disableOnExternalMouse == std::optional<bool>(true));
   CHECK(input.touchpad.tapAndDrag == std::optional<bool>(true));
   CHECK(input.touchpad.dragLock == std::optional(umbriel::DragLock::Sticky));
+  CHECK(input.touchpad.scrollMethod == std::optional(umbriel::ScrollMethod::Edge));
   CHECK(input.touchpad.clickMethod == std::optional(umbriel::ClickMethod::ButtonAreas));
   CHECK(input.touchpad.tapButtonMap == std::optional(umbriel::TapButtonMap::LeftMiddleRight));
   CHECK(input.touchpad.leftHanded == std::optional<bool>(true));
@@ -2769,6 +2772,7 @@ scroll_button_lock = false
     }
     CHECK(touchpad->sensitivity == std::optional<double>(-0.5));
     CHECK(touchpad->disableWhileTyping == std::optional<bool>(false));
+    CHECK(touchpad->scrollMethod == std::optional(umbriel::ScrollMethod::Edge));
     CHECK(touchpad->clickMethod == std::optional(umbriel::ClickMethod::ClickFinger));
     CHECK(touchpad->tapButtonMap == std::optional(umbriel::TapButtonMap::LeftRightMiddle));
     CHECK(touchpad->enabled == std::optional<bool>(true));
@@ -2807,6 +2811,35 @@ UMBRIEL_TEST(touchpadAccelerationDefaultsToUnset) {
   const umbriel::Config defaults;
   CHECK(!defaults.input.touchpad.accelProfile.has_value());
   CHECK(!defaults.input.touchpad.sensitivity.has_value());
+}
+
+UMBRIEL_TEST(touchpadScrollMethodDefaultsToUnset) {
+  const umbriel::Config defaults;
+  CHECK(!defaults.input.touchpad.scrollMethod.has_value());
+}
+
+UMBRIEL_TEST(scrollMethodVariantsLoadWithCaseFolding) {
+  const TempConfig file;
+  file.write(R"(
+[input.touchpad]
+scroll_method = "Two_Finger"
+
+[[input.device]]
+name = "Acme Precision Touchpad"
+scroll_method = "None"
+)");
+
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  const umbriel::ConfigReloadResult result = store.reload();
+  CHECK(result.success);
+  const auto& input = store.config().input;
+  CHECK(input.touchpad.scrollMethod == std::optional(umbriel::ScrollMethod::TwoFinger));
+  const auto* device = input.findDevice("Acme Precision Touchpad");
+  CHECK(device != nullptr);
+  if (device != nullptr) {
+    CHECK(device->scrollMethod == std::optional(umbriel::ScrollMethod::None));
+  }
 }
 
 UMBRIEL_TEST(touchpadScrollFactorDefaultsToUnset) {
