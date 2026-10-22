@@ -1,6 +1,7 @@
 #pragma once
 
 #include "scene/ssd_frame_geometry.h"
+#include "scene/surface_blur.h"
 #include "view/chrome_attachment.h"
 
 #include <array>
@@ -11,6 +12,7 @@
 struct wlr_scene_node;
 struct wlr_scene_rect;
 struct wlr_scene_buffer;
+struct wlr_scene_blur;
 
 namespace umbriel {
   class TabLabelCache;
@@ -22,6 +24,8 @@ namespace umbriel {
     void layout(const ViewChromeGeometry& geometry) override;
     void setFocused(bool focused) override;
     void setAlpha(float alpha) override;
+    // Like surface blur, backdrop blur follows lifecycle fades independently of the chrome's drag opacity.
+    void setAlphas(float chromeAlpha, float blurAlpha);
     void reloadConfig() override;
     void setTitle(std::string_view title);
     void setResizable(bool resizable);
@@ -29,6 +33,8 @@ namespace umbriel {
     void setMaximized(bool maximized);
     void setHovered(SsdFramePart part);
     void setPressed(SsdFramePart part);
+    void setBlurOptions(const SurfaceBlurOptions& options);
+    void setBlurLive(bool live);
     [[nodiscard]] bool maximizeEnabled() const { return m_maximizeEnabled; }
     [[nodiscard]] int titleBarHeight() const { return m_geometry.titleBarHeight; }
     [[nodiscard]] bool contains(const wlr_scene_node* node) const;
@@ -40,9 +46,13 @@ namespace umbriel {
   private:
     void redraw();
     void updateColors();
+    void updateBlur();
     [[nodiscard]] int zoomed(int value) const;
     wlr_scene_tree* m_tree = nullptr;
     wlr_scene_rect* m_background = nullptr;
+    wlr_scene_blur* m_blur = nullptr;
+    SurfaceBlurOptions m_blurOptions;
+    bool m_blurLive = false;
     wlr_scene_buffer* m_label = nullptr;
     wlr_scene_rect* m_close = nullptr;
     wlr_scene_rect* m_maximize = nullptr;
@@ -56,6 +66,7 @@ namespace umbriel {
     bool m_maximized = false;
     bool m_preview = false;
     float m_alpha = 1.0F;
+    float m_blurAlpha = 1.0F;
     SsdFramePart m_hovered = SsdFramePart::None;
     SsdFramePart m_pressed = SsdFramePart::None;
   };

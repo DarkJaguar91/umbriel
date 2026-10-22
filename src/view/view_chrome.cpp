@@ -109,7 +109,9 @@ namespace umbriel {
     m_ssdFrame->setMaximizeEnabled(!fixed);
     m_ssdFrame->setMaximized(scheduledMaximized() || floatingMaximized());
     m_ssdFrame->setFocused(m_borderFocusedState);
-    m_ssdFrame->setAlpha(chromeAlpha());
+    m_ssdFrame->setAlphas(chromeAlpha(), m_fadeAlpha * m_overviewOpacity);
+    m_ssdFrame->setBlurOptions(blurOptions());
+    m_ssdFrame->setBlurLive(m_server->cursor() != nullptr && m_server->cursor()->isDraggingView(this));
     const wlr_box content =
         m_presentedBox.width > 0 && m_presentedBox.height > 0 ? m_presentedBox : committedContentBox();
     layoutChromeAttachment(content.width, content.height);
@@ -261,6 +263,8 @@ namespace umbriel {
 
   void View::updateBlur(int contentWidth, int contentHeight) {
     UMBRIEL_ZONE("View::updateBlur");
+    if (m_ssdFrame != nullptr)
+      m_ssdFrame->setBlurOptions(blurOptions());
     if (currentFullscreen() && fullscreenOpaque()) {
       m_decoration.hideBlur();
       return;

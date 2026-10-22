@@ -1463,7 +1463,7 @@ namespace umbriel {
         },
         &ctx
     );
-    const auto captureRects = [&](auto&& visit, wlr_scene_tree* tree) -> void {
+    const auto captureNodes = [&](auto&& visit, wlr_scene_tree* tree) -> void {
       wlr_scene_node* node;
       wl_list_for_each(node, &tree->children, link) {
         if (node->type == WLR_SCENE_NODE_TREE) {
@@ -1476,10 +1476,18 @@ namespace umbriel {
                {node->x, node->y, rect->width, rect->height},
                rect->corners.top_left}
           );
+        } else if (node->type == WLR_SCENE_NODE_BLUR) {
+          auto* blur = wlr_scene_blur_from_node(node);
+          m_blurs.push_back({
+              blur,
+              blur->alpha,
+              {node->x, node->y, blur->width, blur->height},
+              {blur->corners.top_left, blur->corners.top_right, blur->corners.bottom_right, blur->corners.bottom_left},
+          });
         }
       }
     };
-    captureRects(captureRects, m_tree);
+    captureNodes(captureNodes, m_tree);
     m_alpha.snap(1.0);
     m_alpha.retarget(0.0, durationMs, curve);
 
@@ -1566,6 +1574,20 @@ namespace umbriel {
         const int r = static_cast<int>(std::lround(rect.radius * std::min(scaleX, scaleY)));
         const bool background = rect.box.y == -m_topExtension && rect.box.width == m_captured.width;
         wlr_scene_rect_set_corner_radii(rect.node, background ? corner_radii_new(r, r, 0, 0) : corner_radii_all(r));
+      }
+      for (const Blur& blur : m_blurs) {
+        wlr_scene_node_set_position(
+            &blur.node->node, static_cast<int>(std::lround(blur.box.x * scaleX)),
+            static_cast<int>(std::lround(blur.box.y * scaleY))
+        );
+        wlr_scene_blur_set_size(
+            blur.node, std::max(1, static_cast<int>(std::lround(blur.box.width * scaleX))),
+            std::max(1, static_cast<int>(std::lround(blur.box.height * scaleY)))
+        );
+        const auto radius = [&](size_t corner) {
+          return static_cast<int>(std::lround(blur.radii[corner] * std::min(scaleX, scaleY)));
+        };
+        wlr_scene_blur_set_corner_radii(blur.node, corner_radii_new(radius(0), radius(1), radius(2), radius(3)));
       }
       if (m_content != m_tree) {
         const wlr_box contentClip{0, 0, width, height};
@@ -1663,6 +1685,8 @@ namespace umbriel {
         channel *= alpha;
       wlr_scene_rect_set_color(rect.node, color.data());
     }
+    for (const Blur& blur : m_blurs)
+      wlr_scene_blur_set_alpha(blur.node, blur.baseAlpha * alpha);
     for (auto& border : m_borders) {
       float innerColor[4];
       float outerColor[4];

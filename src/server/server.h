@@ -58,6 +58,7 @@ struct wlr_relative_pointer_manager_v1;
 struct wlr_renderer;
 struct wlr_scene;
 struct wlr_scene_buffer;
+struct wlr_scene_blur;
 struct wlr_scene_output_layout;
 struct wlr_scene_rect;
 struct wlr_scene_tree;
@@ -835,6 +836,13 @@ namespace umbriel {
         int radius = 0;
       };
       std::vector<Rect> m_rects;
+      struct Blur {
+        wlr_scene_blur* node = nullptr;
+        float baseAlpha = 1.0F;
+        wlr_box box{};
+        std::array<int, 4> radii{};
+      };
+      std::vector<Blur> m_blurs;
       int m_topExtension = 0;
       std::vector<BorderSnapshot> m_borders;
       ShadowSnapshot m_shadow;
