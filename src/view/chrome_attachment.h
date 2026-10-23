@@ -27,8 +27,8 @@ namespace umbriel {
     bool operator==(const ViewChromeGeometry&) const = default;
   };
 
-  // Compositor chrome a view carries beside its own borders, such as a tab bar. Its scene nodes hang under the view's
-  // frame, so it follows every position, slide, and visibility change the view makes. The view owns it, destroys it
+  // Compositor chrome a view carries beside its own borders, such as a tab bar. Its scene nodes share the view's
+  // animated content tree, following its transforms and visibility. The view owns it, destroys it
   // before the frame, and reports to it every change chrome follows; it knows nothing else about it.
   class ViewChromeAttachment {
   public:
@@ -39,7 +39,7 @@ namespace umbriel {
 
     virtual void layout(const ViewChromeGeometry& geometry) = 0;
     virtual void setFocused(bool focused) = 0;
-    // The view's fade, drag, and overview opacity, which chrome fades with.
+    // The view's fade, drag, and overview opacity, with shader-composited fades applied by the shared tree.
     virtual void setAlpha(float alpha) = 0;
     // The configuration was reloaded.
     virtual void reloadConfig() = 0;

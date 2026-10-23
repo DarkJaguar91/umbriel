@@ -1025,7 +1025,7 @@ namespace umbriel {
     if (m_ssdFrame != nullptr && titleBarHeight() > 0)
       m_ssdFrame->snapshot(snap);
 
-    // Copy surface buffers.
+    // Copy client surfaces. Chrome snapshots already own their label buffers.
     struct CopyCtx {
       wlr_scene_tree* snap;
       ColorManager* colorManager;
@@ -1039,6 +1039,10 @@ namespace umbriel {
         [](wlr_scene_buffer* src, int sx, int sy, void* data) {
           auto* c = static_cast<CopyCtx*>(data);
           if (src->buffer == nullptr || !src->node.enabled) {
+            return;
+          }
+          wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(src);
+          if (sceneSurface == nullptr) {
             return;
           }
           wlr_scene_buffer* copy = wlr_scene_buffer_create(c->snap, src->buffer);
@@ -1058,9 +1062,7 @@ namespace umbriel {
           wlr_scene_buffer_set_opacity(copy, src->opacity);
           wlr_scene_buffer_copy_color(copy, src);
           if (c->colorManager != nullptr) {
-            if (wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(src)) {
-              c->colorManager->applySurfaceDescriptionToBuffer(sceneSurface->surface, copy);
-            }
+            c->colorManager->applySurfaceDescriptionToBuffer(sceneSurface->surface, copy);
           }
           ++c->buffersCopied;
         },

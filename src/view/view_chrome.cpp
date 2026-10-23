@@ -95,7 +95,7 @@ namespace umbriel {
       m_server->scheduleIpcWindowsEvent();
     }
     if (titleBarHeight() > 0 && m_ssdFrame == nullptr) {
-      m_ssdFrame = std::make_unique<SsdFrame>(chromeParent(), TabLabelCache::shared());
+      m_ssdFrame = std::make_unique<SsdFrame>(chromeParent(), TabLabelCache::shared(), m_sceneTree);
     }
     if (m_ssdFrame == nullptr)
       return;
@@ -346,8 +346,8 @@ namespace umbriel {
     }
     const Output* output = currentOutput();
     const ViewChromeGeometry geometry{
-        .contentX = m_contentTree->node.x,
-        .contentY = m_contentTree->node.y,
+        .contentX = 0,
+        .contentY = 0,
         .contentWidth = contentWidth,
         .contentHeight = contentHeight,
         .borderInset = borderInset(),

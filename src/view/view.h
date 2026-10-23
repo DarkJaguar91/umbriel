@@ -298,7 +298,7 @@ namespace umbriel {
     // Chrome carried beside the borders, its scene nodes under chromeParent(). Replacing it destroys the previous one.
     void setChromeAttachment(std::unique_ptr<ViewChromeAttachment> attachment);
     [[nodiscard]] ViewChromeAttachment* chromeAttachment() const { return m_chromeAttachment.get(); }
-    [[nodiscard]] wlr_scene_tree* chromeParent() const { return m_sceneTree; }
+    [[nodiscard]] wlr_scene_tree* chromeParent() const { return m_contentTree; }
     // Scratchpad membership: selects the scratchpad border palette and animation event, and matches is_scratchpad.
     void setInScratchpad(bool scratchpad);
     void animateTo(int x, int y);
@@ -596,7 +596,9 @@ namespace umbriel {
     void updateBorderGeometry(int contentWidth, int contentHeight);
     // Lay the chrome attachment out around content of that size, which is remembered for later relayouts.
     void layoutChromeAttachment(int contentWidth, int contentHeight);
-    [[nodiscard]] float chromeAlpha() const { return m_fadeAlpha * m_dragOpacity * m_overviewOpacity; }
+    [[nodiscard]] float chromeAlpha() const {
+      return (fadeComposited() ? 1.0F : m_fadeAlpha) * m_dragOpacity * m_overviewOpacity;
+    }
     void applyCornerRadius();
     void reloadBackdropColor() { m_presentation.reloadBackdropColor(); }
     void refreshConfigChrome();

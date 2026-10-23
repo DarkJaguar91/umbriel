@@ -15,20 +15,23 @@ namespace umbriel {
     bool rejectInput(wlr_scene_buffer*, double*, double*) { return false; }
   } // namespace
 
-  SsdFrame::SsdFrame(wlr_scene_tree* parent, std::shared_ptr<TabLabelCache> labels)
-      : m_tree(wlr_scene_tree_create(parent)), m_labels(std::move(labels)) {
+  SsdFrame::SsdFrame(wlr_scene_tree* parent, std::shared_ptr<TabLabelCache> labels, wlr_scene_tree* inputParent)
+      : m_tree(wlr_scene_tree_create(parent)),
+        m_gripTree(wlr_scene_tree_create(inputParent != nullptr ? inputParent : parent)), m_labels(std::move(labels)) {
     const float clear[4]{};
     m_background = wlr_scene_rect_create(m_tree, 1, 1, clear);
     m_close = wlr_scene_rect_create(m_tree, 1, 1, clear);
     m_maximize = wlr_scene_rect_create(m_tree, 1, 1, clear);
     for (auto*& grip : m_grips)
-      grip = wlr_scene_rect_create(m_tree, 1, 1, clear);
+      grip = wlr_scene_rect_create(m_gripTree, 1, 1, clear);
     wlr_scene_node_set_enabled(&m_tree->node, false);
+    wlr_scene_node_set_enabled(&m_gripTree->node, false);
   }
 
   SsdFrame::~SsdFrame() {
     if (m_blur != nullptr)
       wlr_scene_node_destroy(&m_blur->node);
+    wlr_scene_node_destroy(&m_gripTree->node);
     wlr_scene_node_destroy(&m_tree->node);
   }
 
@@ -166,11 +169,13 @@ namespace umbriel {
     const int h = g.titleBarHeight;
     const bool shown = !g.suppressed && h > 0 && g.contentWidth > 0 && g.contentHeight > 0;
     wlr_scene_node_set_enabled(&m_tree->node, shown);
+    wlr_scene_node_set_enabled(&m_gripTree->node, shown && m_resizable && !m_preview);
     if (!shown) {
       updateBlur();
       return;
     }
     wlr_scene_node_set_position(&m_tree->node, zoomed(g.contentX), zoomed(g.contentY));
+    wlr_scene_node_set_position(&m_gripTree->node, zoomed(g.contentX), zoomed(g.contentY));
     const auto place = [&](wlr_scene_rect* rect, const wlr_box& box) {
       wlr_scene_node_set_position(&rect->node, zoomed(box.x), zoomed(box.y));
       wlr_scene_rect_set_size(
@@ -234,7 +239,7 @@ namespace umbriel {
   bool SsdFrame::contains(const wlr_scene_node* node) const {
     for (const wlr_scene_node* current = node; current != nullptr;
          current = current->parent != nullptr ? &current->parent->node : nullptr) {
-      if (current == &m_tree->node)
+      if (current == &m_tree->node || current == &m_gripTree->node)
         return true;
     }
     return false;

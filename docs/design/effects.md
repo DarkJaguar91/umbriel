@@ -137,6 +137,14 @@ An overview card carries the view's slots, except drag, on its tree, border,
 and surface tree, which holds every mirrored surface buffer as the view's
 surface tree holds its surfaces.
 
+The live content tree also owns the server-side title bar and attached chrome,
+so their pixels share window lifecycle, movement, focus dimming, and drag
+deformation in one capture and UV domain. Chrome bypasses its per-node lifecycle
+fade while a shader composites that fade. Invisible title-bar resize bands stay
+under the outer frame, outside animation capture bounds. Closing snapshots copy
+the title-bar visuals once and copy only client surface buffers into their
+content tree; title labels are already part of the title-bar snapshot.
+
 `wlr_scene_node_copy_animations_for_snapshot`
 ([`wlr_scene.c`](../../umbrielfx/types/scene/wlr_scene.c)) copies
 each populated slot with its current parameters, moves its feedback history,
@@ -731,6 +739,12 @@ behavior.
 `render/renderer_recovery` verifies that the built-in fade compiles once per
 renderer and that an animation preset rebinds to the replacement renderer's
 program.
+
+`effect/animation_title_bar` samples title-bar and client pixels before and
+after a shader's midpoint during opening, movement, and closing. It checks one
+shared UV domain and verifies matching built-in lifecycle fade alpha. Its
+negative control attaches the title bar outside the animated content tree,
+which fails the opening title-bar shader assertion.
 
 Headless checks do not establish physical HDR output correctness or hardware
 GPU-reset recovery. Those require suitable hardware and a running-session check.

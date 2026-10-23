@@ -19,7 +19,7 @@ namespace umbriel {
 
   class SsdFrame final : public ViewChromeAttachment {
   public:
-    SsdFrame(wlr_scene_tree* parent, std::shared_ptr<TabLabelCache> labels);
+    SsdFrame(wlr_scene_tree* parent, std::shared_ptr<TabLabelCache> labels, wlr_scene_tree* inputParent = nullptr);
     ~SsdFrame() override;
     void layout(const ViewChromeGeometry& geometry) override;
     void setFocused(bool focused) override;
@@ -49,6 +49,8 @@ namespace umbriel {
     void updateBlur();
     [[nodiscard]] int zoomed(int value) const;
     wlr_scene_tree* m_tree = nullptr;
+    // Invisible resize bands stay outside the window's animation capture bounds.
+    wlr_scene_tree* m_gripTree = nullptr;
     wlr_scene_rect* m_background = nullptr;
     wlr_scene_blur* m_blur = nullptr;
     SurfaceBlurOptions m_blurOptions;
