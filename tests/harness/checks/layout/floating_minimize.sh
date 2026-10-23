@@ -169,13 +169,26 @@ wait_for_field minimize-a minimized false
 wait_for_field minimize-b minimized false
 wait_for_field minimize-b active true
 
-# Restoring a member another way drops the set: the next toggle minimizes again instead of restoring.
+# Restoring one another way and minimizing it again leaves nothing to hide, so the toggle restores everything.
 msg workspace-toggle-show-desktop
+wait_for_field minimize-a minimized true
 wait_for_field minimize-b minimized true
 msg "window-focus:$A"
 wait_for_field minimize-a minimized false
-msg workspace-toggle-show-desktop
+msg window-minimize
 wait_for_field minimize-a minimized true
-expect_field minimize-b minimized true
+msg workspace-toggle-show-desktop
+wait_for_field minimize-a minimized false
+wait_for_field minimize-b minimized false
+wait_for_field minimize-b active true
 
-echo "floating windows minimize by action, client, and taskbar, return through every explicit focus path, and show desktop restores its set"
+# A window minimized before showing the desktop comes back with the rest.
+msg "window-minimize:$A"
+wait_for_field minimize-a minimized true
+msg workspace-toggle-show-desktop
+wait_for_field minimize-b minimized true
+msg workspace-toggle-show-desktop
+wait_for_field minimize-a minimized false
+wait_for_field minimize-b minimized false
+
+echo "floating windows minimize by action, client, and taskbar, return through every explicit focus path, and show desktop restores every minimized window"

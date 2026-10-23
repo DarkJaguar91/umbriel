@@ -387,7 +387,7 @@ namespace umbriel {
     if (view == m_lastOnlyWindowView) {
       m_lastOnlyWindowView = nullptr;
     }
-    forgetShowDesktop(view);
+    forgetShowDesktopFocus(view);
     updateUrgent();
     std::erase(m_floatingStack, view);
     std::erase(m_switchViews, view);
@@ -1667,43 +1667,41 @@ namespace umbriel {
   }
 
   void Workspace::toggleShowDesktop() {
-    if (!m_showDesktopViews.empty()) {
-      // Cleared first: restoring a member would otherwise drop the set mid-loop.
-      const std::vector<View*> views = std::exchange(m_showDesktopViews, {});
-      View* focus = std::exchange(m_showDesktopFocus, nullptr);
-      for (View* view : views) {
-        view->setMinimized(false);
-      }
-      if (focus != nullptr && focus->mapped() && !focus->minimized() && focus->workspace() == this) {
-        m_group->server()->focusView(focus, FocusReason::Directional);
-      }
-      return;
-    }
     View* focus = m_focusedView;
     // The focused window goes last, so focus is handed on once instead of through every other window.
     std::vector<View*> views = m_views;
     if (const auto focused = std::ranges::find(views, focus); focused != views.end()) {
       std::rotate(focused, std::next(focused), views.end());
     }
+    bool hid = false;
     for (View* view : views) {
-      if (!view->minimized() && view->requestMinimize()) {
-        m_showDesktopViews.push_back(view);
-      }
+      hid = (!view->minimized() && view->requestMinimize()) || hid;
     }
-    m_showDesktopFocus = m_showDesktopViews.empty() ? nullptr : focus;
+    if (hid) {
+      m_showDesktopFocus = focus;
+      return;
+    }
+    // Nothing left to hide: bring back every minimized window here, however it was minimized.
+    View* latest = nullptr;
+    for (View* view : m_views) {
+      if (!view->mapped() || !view->minimized()) {
+        continue;
+      }
+      if (latest == nullptr || view->minimizeSerial() > latest->minimizeSerial()) {
+        latest = view;
+      }
+      view->setMinimized(false);
+    }
+    focus = std::exchange(m_showDesktopFocus, nullptr);
+    if (focus == nullptr || !focus->mapped() || focus->minimized() || focus->workspace() != this) {
+      focus = m_focusedView != nullptr ? nullptr : latest;
+    }
+    if (focus != nullptr) {
+      m_group->server()->focusView(focus, FocusReason::Directional);
+    }
   }
 
-  bool Workspace::inShowDesktop(const View* view) const {
-    return std::ranges::find(m_showDesktopViews, view) != m_showDesktopViews.end();
-  }
-
-  void Workspace::clearShowDesktop() {
-    m_showDesktopViews.clear();
-    m_showDesktopFocus = nullptr;
-  }
-
-  void Workspace::forgetShowDesktop(const View* view) {
-    std::erase(m_showDesktopViews, view);
+  void Workspace::forgetShowDesktopFocus(const View* view) {
     if (m_showDesktopFocus == view) {
       m_showDesktopFocus = nullptr;
     }

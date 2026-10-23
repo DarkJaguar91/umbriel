@@ -249,13 +249,11 @@ namespace umbriel {
     // Floating frames from back to front, matching their workspace stacking order.
     [[nodiscard]] const std::vector<View*>& floatingStack() const noexcept { return m_floatingStack; }
     [[nodiscard]] bool hasViews() const { return !m_views.empty(); }
-    // Minimize every floating window here and remember them, or restore that set and its focus. A set this toggle
-    // remembers is dropped when one of its windows is restored another way or a new window maps here.
+    // Minimize every floating window here that can be, remembering the focus. When none is left to hide, restore
+    // every minimized window here, however it was minimized, and return focus to where it was.
     void toggleShowDesktop();
-    [[nodiscard]] bool inShowDesktop(const View* view) const;
-    void clearShowDesktop();
-    // Drop a view that unmaps or leaves this workspace from the remembered set.
-    void forgetShowDesktop(const View* view);
+    // Drop a view that unmaps or leaves this workspace as the focus a show-desktop toggle restores.
+    void forgetShowDesktopFocus(const View* view);
     // Pull the scroll offset back into [0, maxScroll]. For removals and restored offsets only: a touchpad swipe
     // overscrolls on purpose.
     void clampScrollToRange();
@@ -324,8 +322,7 @@ namespace umbriel {
     LayoutMode m_layoutMode = LayoutMode::Scrolling;
     std::optional<LayoutMode> m_layoutModeOverride;
     View* m_focusedView = nullptr;
-    // The windows the last show-desktop toggle minimized, and the focus it restores with them.
-    std::vector<View*> m_showDesktopViews;
+    // The focus the last show-desktop toggle hid, restored with the windows.
     View* m_showDesktopFocus = nullptr;
     bool m_floatingLayerActive = false;
     bool m_inSwitchTransition = false;

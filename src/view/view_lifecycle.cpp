@@ -534,10 +534,6 @@ namespace umbriel {
     // pick a different set of dynamic effects than the ones applied above.
     applyDynamicRules();
     syncMinimizeEligibility();
-    // A new window cancels the pending show-desktop restore of its workspace.
-    if (m_workspace != nullptr) {
-      m_workspace->clearShowDesktop();
-    }
     if (draggedToplevel) {
       m_server->seat()->toplevelDrags().mapped(this, restoreTiled && !assignedScratchpad);
     }
@@ -626,7 +622,7 @@ namespace umbriel {
       }
     }
     if (m_workspace != nullptr) {
-      m_workspace->forgetShowDesktop(this);
+      m_workspace->forgetShowDesktopFocus(this);
     }
     // Choose the layout neighbor while this view still belongs to the layout. Waiting for destroy loses that position.
     // It remains the fallback when the pointer did not belong to the closing tile or no survivor takes its place.

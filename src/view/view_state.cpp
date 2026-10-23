@@ -289,10 +289,6 @@ namespace umbriel {
     if (m_minimized == minimized) {
       return;
     }
-    // Showing a window any other way breaks the set a show-desktop toggle would restore.
-    if (!minimized && m_workspace != nullptr && m_workspace->inShowDesktop(this)) {
-      m_workspace->clearShowDesktop();
-    }
     const View* keyboardView = View::fromSurface(m_server->seat()->wlr()->keyboard_state.focused_surface);
     const bool heldKeyboard = keyboardView != nullptr && keyboardView->placementRoot() == this;
     m_minimized = minimized;
