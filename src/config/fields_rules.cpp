@@ -212,7 +212,10 @@ namespace umbriel {
           color("border_color_outer", &W::borderColorOuter),
           registry::choice(
               "title_bar", &W::titleBar,
-              {{"on", TitleBarMode::On}, {"forced", TitleBarMode::Forced}, {"off", TitleBarMode::Off}}
+              {{"on", TitleBarMode::On},
+               {"negotiated", TitleBarMode::Negotiated},
+               {"forced", TitleBarMode::Forced},
+               {"off", TitleBarMode::Off}}
           ),
           integer("border_width", 0, 100, &W::borderWidth),
           integer("outer_border_width", 0, 100, &W::outerBorderWidth),

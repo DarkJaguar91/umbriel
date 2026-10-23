@@ -50,4 +50,12 @@ sed -i 's/title_bar = "forced"/title_bar = "on"/' "$UMBRIEL_CONFIG"
 title_bar_wait_field ssd-x11 title_bar false
 printf 'decorations on\n' >&"$control"
 title_bar_wait_field ssd-x11 title_bar true
+# Negotiated mode continues to follow Xwayland hints without Wayland negotiation.
+sed -i 's/title_bar = "on"/title_bar = "negotiated"/' "$UMBRIEL_CONFIG"
+"$UMBRIEL" msg config-reload > /dev/null
+title_bar_wait_field ssd-x11 title_bar true
+printf 'decorations off\n' >&"$control"
+title_bar_wait_field ssd-x11 title_bar false
+printf 'decorations on\n' >&"$control"
+title_bar_wait_field ssd-x11 title_bar true
 echo 'Xwayland title bars follow Motif hint transitions and rule overrides'

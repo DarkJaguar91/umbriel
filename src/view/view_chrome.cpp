@@ -41,7 +41,7 @@ namespace umbriel {
       return true;
     if (m_xsurface != nullptr)
       return m_xsurface->decorations == WLR_XWAYLAND_SURFACE_DECORATIONS_ALL;
-    return m_xdgDecorationPreference.value_or(m_legacyDecorationPreference.value_or(true));
+    return m_xdgDecorationPreference.value_or(m_legacyDecorationPreference.value_or(mode == TitleBarMode::On));
   }
 
   void View::refreshTitleBar() {

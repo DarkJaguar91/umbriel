@@ -424,11 +424,13 @@ int main(int argc, char** argv) {
     }
     state.decoration = zxdg_decoration_manager_v1_get_toplevel_decoration(state.decorationManager, state.toplevel);
     zxdg_toplevel_decoration_v1_add_listener(state.decoration, &kDecorationListener, &state);
-    zxdg_toplevel_decoration_v1_set_mode(
-        state.decoration,
-        strcmp(mode, "server") == 0 ? ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
-                                    : ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE
-    );
+    if (strcmp(mode, "unset") != 0) {
+      zxdg_toplevel_decoration_v1_set_mode(
+          state.decoration,
+          strcmp(mode, "server") == 0 ? ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
+                                      : ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE
+      );
+    }
   }
   wl_surface_commit(state.surface);
 

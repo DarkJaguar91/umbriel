@@ -4634,13 +4634,13 @@ UMBRIEL_TEST(titleBarModesUseStrictVocabulary) {
   CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
   for (const auto& [name, mode] :
        {std::pair{"forced", umbriel::TitleBarMode::Forced}, std::pair{"on", umbriel::TitleBarMode::On},
-        std::pair{"off", umbriel::TitleBarMode::Off}}) {
+        std::pair{"off", umbriel::TitleBarMode::Off}, std::pair{"negotiated", umbriel::TitleBarMode::Negotiated}}) {
     file.write(std::string("[appearance.title_bar]\nmode = \"") + name + "\"\n");
     CHECK(store.reload().success);
     CHECK(store.diagnostics().empty());
     CHECK_EQ(store.config().appearance.titleBar.mode, mode);
   }
-  for (const auto name : {"auto", "force"}) {
+  for (const auto name : {"auto", "force", "on-demand"}) {
     file.write(std::string("[appearance.title_bar]\nmode = \"") + name + "\"\n");
     CHECK(store.reload().success);
     CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
@@ -4667,15 +4667,18 @@ title_bar = "forced"
 title_bar = "off"
 [[window_rule]]
 title_bar = "on"
+[[window_rule]]
+title_bar = "negotiated"
 )");
   auto& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
   CHECK(store.reload().success);
   CHECK(store.diagnostics().empty());
-  CHECK_EQ(store.config().windowRules.size(), size_t{3});
+  CHECK_EQ(store.config().windowRules.size(), size_t{4});
   CHECK_EQ(store.config().windowRules[0].titleBar, umbriel::TitleBarMode::Forced);
   CHECK_EQ(store.config().windowRules[1].titleBar, umbriel::TitleBarMode::Off);
   CHECK_EQ(store.config().windowRules[2].titleBar, umbriel::TitleBarMode::On);
+  CHECK_EQ(store.config().windowRules[3].titleBar, umbriel::TitleBarMode::Negotiated);
   file.write(R"(
 [[window_rule]]
 title_bar = true

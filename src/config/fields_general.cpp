@@ -80,7 +80,10 @@ namespace umbriel {
       static const registry::Fields<A::TitleBar> titleBar{
           registry::choice(
               "mode", &A::TitleBar::mode,
-              {{"forced", TitleBarMode::Forced}, {"off", TitleBarMode::Off}, {"on", TitleBarMode::On}}
+              {{"forced", TitleBarMode::Forced},
+               {"off", TitleBarMode::Off},
+               {"on", TitleBarMode::On},
+               {"negotiated", TitleBarMode::Negotiated}}
           ),
           integer("height", 16, 128, &A::TitleBar::height),
           integer("button_corner_radius", -1, 100, &A::TitleBar::buttonCornerRadius),

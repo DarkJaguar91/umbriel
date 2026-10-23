@@ -32,7 +32,7 @@ namespace umbriel {
     Horizontal,
   };
 
-  enum class TitleBarMode : uint8_t { On, Forced, Off };
+  enum class TitleBarMode : uint8_t { On, Negotiated, Forced, Off };
 
   enum class ModifierKey {
     Super,
