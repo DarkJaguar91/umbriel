@@ -33,7 +33,7 @@ namespace umbriel {
     int y = 0;
     bool started = false;
     bool ended = false;
-    std::optional<bool> tileOnDrop{};
+    std::optional<bool> tileOnDrop = std::nullopt;
     wl_listener sourceDestroy{};
     wl_listener toplevelDestroy{};
     wl_listener drop{};
