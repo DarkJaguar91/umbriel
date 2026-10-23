@@ -5,6 +5,7 @@
 #include "xdg-shell-client-protocol.h"
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <cstdint>
 #include <cstdio>
@@ -70,6 +71,8 @@ namespace {
     bool desynchronized = false;
     bool tagged = true;
     bool compound = false;
+    bool custom = false;
+    std::array<wp_image_description_v1*, 5> customDescriptions{};
     uint32_t fillColor = 0xFF777777U;
     std::deque<Description> descriptions;
   };
@@ -339,6 +342,44 @@ namespace {
   }
   constexpr wl_callback_listener kFrameListener{.done = frameDone};
 
+  void setRawPrimaries(wp_image_description_creator_params_v1* params, bool bt2020) {
+    wp_image_description_creator_params_v1_set_primaries(
+        params, bt2020 ? 708000 : 640000, bt2020 ? 292000 : 330000, bt2020 ? 170000 : 300000, bt2020 ? 797000 : 600000,
+        bt2020 ? 131000 : 150000, bt2020 ? 46000 : 60000, 312700, 329000
+    );
+  }
+
+  bool awaitSurfaceDescription(State& state, wp_image_description_v1* description) {
+    state.ready = false;
+    state.failed = false;
+    wp_image_description_v1_add_listener(description, &kSurfaceDescriptionListener, &state);
+    while (!state.ready && !state.failed && wl_display_dispatch(state.display) >= 0) {
+    }
+    return state.ready;
+  }
+
+  struct DescriptionResult {
+    bool ready = false;
+    bool failed = false;
+    uint32_t cause = 0;
+  };
+  void resultFailed(void* data, wp_image_description_v1*, uint32_t cause, const char*) {
+    auto& result = *static_cast<DescriptionResult*>(data);
+    result.failed = true;
+    result.cause = cause;
+  }
+  void resultReady(void* data, wp_image_description_v1*, uint32_t) {
+    static_cast<DescriptionResult*>(data)->ready = true;
+  }
+  void resultReady2(void* data, wp_image_description_v1*, uint32_t, uint32_t) {
+    static_cast<DescriptionResult*>(data)->ready = true;
+  }
+  constexpr wp_image_description_v1_listener kResultListener{
+      .failed = resultFailed,
+      .ready = resultReady,
+      .ready2 = resultReady2,
+  };
+
   bool expectProtocolError(State& state, const wl_interface* expectedInterface, uint32_t expectedCode) {
     if (wl_display_roundtrip(state.display) >= 0) {
       return false;
@@ -354,7 +395,14 @@ int main(int argc, char** argv) {
   State state;
   bool subsurface = false;
   for (int i = 1; i < argc; ++i) {
-    if (std::strcmp(argv[i], "compound") == 0) {
+    if (std::strcmp(argv[i], "custom") == 0) {
+      state.custom = true;
+      state.fillColor = 0xFF807060U;
+    } else if (std::strcmp(argv[i], "v1") == 0) {
+      state.requestedVersion = 1;
+    } else if (std::strcmp(argv[i], "v3") == 0) {
+      state.requestedVersion = 3;
+    } else if (std::strcmp(argv[i], "compound") == 0) {
       state.compound = true;
       state.fillColor = 0xFF101010U;
     } else if (std::strcmp(argv[i], "untagged") == 0) {
@@ -363,9 +411,6 @@ int main(int argc, char** argv) {
       subsurface = true;
       state.desynchronized = std::strcmp(argv[i], "subsurface-desync") == 0;
     }
-  }
-  if (argc == 2 && std::strcmp(argv[1], "v1") == 0) {
-    state.requestedVersion = 1;
   }
   state.display = wl_display_connect(nullptr);
   if (state.display == nullptr) {
@@ -385,14 +430,68 @@ int main(int argc, char** argv) {
     return 1;
   }
   std::println(R"({{"event":"manager","version":{}}})", state.managerVersion);
-  if (argc == 2 && std::strcmp(argv[1], "windows-scrgb") == 0) {
-    wp_color_manager_v1_create_windows_scrgb(state.manager);
-    if (expectProtocolError(state, &wp_color_manager_v1_interface, WP_COLOR_MANAGER_V1_ERROR_UNSUPPORTED_FEATURE)) {
-      std::println(R"({{"event":"unsupported_feature"}})");
-      return 0;
+  if (argc >= 2 && std::strcmp(argv[1], "windows-scrgb") == 0) {
+    auto* description = wp_color_manager_v1_create_windows_scrgb(state.manager);
+    if (!awaitSurfaceDescription(state, description)) {
+      std::println(stderr, "color-feedback-client: native Windows scRGB description was not ready");
+      return 1;
     }
-    std::println(stderr, "color-feedback-client: native Windows scRGB request was not rejected as unsupported");
-    return 1;
+    std::println(R"({{"event":"windows_scrgb_ready"}})");
+    wp_image_description_v1_destroy(description);
+    wl_display_disconnect(state.display);
+    return 0;
+  }
+  if (argc == 2 && std::strncmp(argv[1], "params-", 7) == 0) {
+    const char* mode = argv[1] + 7;
+    auto* params = wp_color_manager_v1_create_parametric_creator(state.manager);
+    wp_image_description_creator_params_v1_set_tf_named(params, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22);
+    uint32_t expected = WP_IMAGE_DESCRIPTION_CREATOR_PARAMS_V1_ERROR_ALREADY_SET;
+    if (std::strcmp(mode, "named-raw") == 0) {
+      wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_SRGB);
+      setRawPrimaries(params, true);
+    } else if (std::strcmp(mode, "raw-named") == 0) {
+      setRawPrimaries(params, true);
+      wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_SRGB);
+    } else if (std::strcmp(mode, "raw-raw") == 0) {
+      setRawPrimaries(params, true);
+      setRawPrimaries(params, false);
+    } else if (std::strcmp(mode, "luminances-twice") == 0) {
+      wp_image_description_creator_params_v1_set_luminances(params, 2000, 80, 80);
+      wp_image_description_creator_params_v1_set_luminances(params, 2000, 160, 80);
+    } else if (std::strcmp(mode, "invalid-maximum") == 0) {
+      wp_image_description_creator_params_v1_set_luminances(params, 1000000, 100, 203);
+      expected = WP_IMAGE_DESCRIPTION_CREATOR_PARAMS_V1_ERROR_INVALID_LUMINANCE;
+    } else if (std::strcmp(mode, "invalid-reference") == 0) {
+      wp_image_description_creator_params_v1_set_luminances(params, 1000000, 200, 100);
+      expected = WP_IMAGE_DESCRIPTION_CREATOR_PARAMS_V1_ERROR_INVALID_LUMINANCE;
+    } else if (std::strcmp(mode, "degenerate") == 0) {
+      wp_image_description_creator_params_v1_set_primaries(params, 0, 0, 0, 0, 0, 0, 312700, 329000);
+      auto* description = wp_image_description_creator_params_v1_create(params);
+      DescriptionResult result;
+      wp_image_description_v1_add_listener(description, &kResultListener, &result);
+      while (!result.ready && !result.failed && wl_display_dispatch(state.display) >= 0) {
+      }
+      if (!result.failed
+          || result.cause != WP_IMAGE_DESCRIPTION_V1_CAUSE_UNSUPPORTED
+          || wl_display_roundtrip(state.display) < 0) {
+        std::println(stderr, "color-feedback-client: degenerate primaries did not fail gracefully");
+        return 1;
+      }
+      std::println(R"({{"event":"description_failed","cause":{}}})", result.cause);
+      wp_image_description_v1_destroy(description);
+      wl_display_disconnect(state.display);
+      return 0;
+    } else {
+      std::println(stderr, "color-feedback-client: unknown parameter case: {}", mode);
+      return 1;
+    }
+    if (!expectProtocolError(state, &wp_image_description_creator_params_v1_interface, expected)) {
+      std::println(stderr, "color-feedback-client: {} did not produce protocol error {}", mode, expected);
+      return 1;
+    }
+    std::println(R"({{"event":"parameter_error","case":"{}","code":{}}})", mode, expected);
+    wl_display_disconnect(state.display);
+    return 0;
   }
   if (argc == 2 && (std::strcmp(argv[1], "duplicate") == 0 || std::strcmp(argv[1], "inert") == 0)) {
     state.surface = wl_compositor_create_surface(state.compositor);
@@ -480,6 +579,28 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
+  if (state.custom) {
+    for (size_t i = 0; i < state.customDescriptions.size(); ++i) {
+      params = wp_color_manager_v1_create_parametric_creator(state.manager);
+      // Setting luminances before the transfer function must preserve the explicit values.
+      if (i >= 2) {
+        wp_image_description_creator_params_v1_set_luminances(params, 0, i == 2 ? 80 : 160, i == 4 ? 160 : 80);
+      }
+      wp_image_description_creator_params_v1_set_tf_named(params, WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_GAMMA22);
+      if (i == 0) {
+        wp_image_description_creator_params_v1_set_primaries_named(params, WP_COLOR_MANAGER_V1_PRIMARIES_BT2020);
+      } else {
+        setRawPrimaries(params, i == 1);
+      }
+      state.customDescriptions[i] = wp_image_description_creator_params_v1_create(params);
+      if (!awaitSurfaceDescription(state, state.customDescriptions[i])) {
+        return 1;
+      }
+    }
+    wp_image_description_v1_destroy(state.surfaceDescription);
+    state.surfaceDescription = state.customDescriptions[0];
+    state.selectedDescription = state.surfaceDescription;
+  }
   if (state.requestedVersion == 1) {
     observeDescription(state, wp_color_management_surface_feedback_v1_get_preferred(state.feedback), "preferred", 0);
     observeDescription(
@@ -534,6 +655,22 @@ int main(int argc, char** argv) {
           state.frame = wl_surface_frame(state.colorTarget);
           wl_callback_add_listener(state.frame, &kFrameListener, &state);
         }
+        wl_surface_commit(state.colorTarget);
+        if (state.colorSubsurface != nullptr && !state.desynchronized) {
+          wl_surface_commit(state.surface);
+        }
+      } else if (state.custom && std::strncmp(label, "custom ", 7) == 0) {
+        unsigned index = 0;
+        char trailing = '\0';
+        if (std::sscanf(label + 7, "%u%c", &index, &trailing) != 1 || index >= state.customDescriptions.size()) {
+          std::println(stderr, "color-feedback-client: invalid custom description: {}", label);
+          return 1;
+        }
+        state.tagged = true;
+        state.selectedDescription = state.customDescriptions[index];
+        wp_color_management_surface_v1_set_image_description(
+            state.colorSurface, state.selectedDescription, WP_COLOR_MANAGER_V1_RENDER_INTENT_PERCEPTUAL
+        );
         wl_surface_commit(state.colorTarget);
         if (state.colorSubsurface != nullptr && !state.desynchronized) {
           wl_surface_commit(state.surface);

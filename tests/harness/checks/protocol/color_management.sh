@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The renderer's input color transform support enables the standard version 2 color-management global and the Wine
-# compatibility global. Builds with wayland-protocols 1.49 expose version 3 to Wine clients for Windows BT.2100.
+# Renderer color transforms enable the same color-management global for native and Wine clients.
+# Builds with wayland-protocols 1.49 expose version 3 for Windows BT.2100.
 set -euo pipefail
 
 readonly GLOBAL_CLIENT="${UMBRIEL_GLOBAL_CLIENT:-./build-debug/tests/global-client}"
@@ -19,11 +19,11 @@ if [[ $COLOR_MANAGER_VERSION != 2 && $COLOR_MANAGER_VERSION != 3 ]]; then
   exit 1
 fi
 
-"$GLOBAL_CLIENT" wp_color_manager_v1 present 2
+"$GLOBAL_CLIENT" wp_color_manager_v1 present "$COLOR_MANAGER_VERSION"
 bash -c 'exec -a wine "$@"' _ \
   "$GLOBAL_CLIENT" wp_color_manager_v1 present "$COLOR_MANAGER_VERSION"
 
-echo "wp_color_manager_v1 version 2 advertised normally; Wine compatibility version $COLOR_MANAGER_VERSION advertised"
+echo "wp_color_manager_v1 version $COLOR_MANAGER_VERSION advertised to native and Wine clients"
 
 # TOML cannot redefine [output.HEADLESS-1], so each phase below replaces the
 # whole config rather than appending to the previous one. Holding the pristine
@@ -142,7 +142,7 @@ if ! jq -e '
 fi
 
 # The overview mirrors client buffers into raw scene buffers. Their color must match the normal scene surface even
-# after Wine's compatibility metadata is repaired at the render boundary.
+# after the surface's committed color description is resolved for the mirror.
 normal_shot="$UMBRIEL_RUNTIME_DIR/wine-scrgb-normal.png"
 overview_shot="$UMBRIEL_RUNTIME_DIR/wine-scrgb-overview.png"
 window_json=$("$UMBRIEL" windows --json | jq '.[] | select(.title == "wine-scrgb")')

@@ -204,6 +204,10 @@ if build_tests
   foreach case_name : [
     'implicit-srgb-target',
     'scene-unset-primaries',
+    'scene-custom-color',
+    'scene-custom-white',
+    'scene-custom-bt1886',
+    'scene-scrgb-absolute-luminance',
     'hdr-white-point-math',
     'hdr-white-point',
     'sdr-white-point-alpha',
@@ -216,6 +220,7 @@ if build_tests
     'gamma22-to-srgb',
     'pq-roundtrip',
     'bt2020-to-srgb',
+    'scrgb-negative-channels',
     'fp16-blending',
     'fp16-blur',
     'fp16-blur-effects',

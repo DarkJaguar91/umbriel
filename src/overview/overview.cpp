@@ -858,11 +858,7 @@ namespace umbriel {
         wlr_scene_buffer_set_transform(mirror->buffer, surface->current.transform);
         // layoutOutput owns the destination geometry; only the color description follows the live node.
         if (wlr_scene_buffer* live = sourceBufferForSurface(&mirror->source->tree->node, surface)) {
-          wlr_scene_buffer_set_transfer_function(mirror->buffer, live->transfer_function);
-          wlr_scene_buffer_set_primaries(mirror->buffer, live->primaries);
-          wlr_scene_buffer_set_luminance_multiplier(mirror->buffer, live->luminance_multiplier);
-          wlr_scene_buffer_set_color_encoding(mirror->buffer, live->color_encoding);
-          wlr_scene_buffer_set_color_range(mirror->buffer, live->color_range);
+          wlr_scene_buffer_copy_color(mirror->buffer, live);
         }
         if (ColorManager* colorManager = m_server->colorManager()) {
           colorManager->applySurfaceDescriptionToBuffer(surface, mirror->buffer);
@@ -1002,11 +998,7 @@ namespace umbriel {
     // are clip-independent, so the view's scene buffer is a safe source.
     if (wlr_scene_buffer* source = entry.sourceBuffer) {
       wlr_scene_buffer_set_opacity(entry.buffer, source->opacity);
-      wlr_scene_buffer_set_transfer_function(entry.buffer, source->transfer_function);
-      wlr_scene_buffer_set_primaries(entry.buffer, source->primaries);
-      wlr_scene_buffer_set_luminance_multiplier(entry.buffer, source->luminance_multiplier);
-      wlr_scene_buffer_set_color_encoding(entry.buffer, source->color_encoding);
-      wlr_scene_buffer_set_color_range(entry.buffer, source->color_range);
+      wlr_scene_buffer_copy_color(entry.buffer, source);
     }
     // Scene surfaces reset their color state on every commit. This passive
     // mirror may copy that state before the render boundary repairs it, so
@@ -1247,11 +1239,7 @@ namespace umbriel {
       wlr_scene_buffer_set_corner_radii(copy, source->corners);
       wlr_scene_buffer_set_corner_box(copy, &source->corner_box);
       wlr_scene_buffer_set_opacity(copy, source->opacity);
-      wlr_scene_buffer_set_transfer_function(copy, source->transfer_function);
-      wlr_scene_buffer_set_primaries(copy, source->primaries);
-      wlr_scene_buffer_set_luminance_multiplier(copy, source->luminance_multiplier);
-      wlr_scene_buffer_set_color_encoding(copy, source->color_encoding);
-      wlr_scene_buffer_set_color_range(copy, source->color_range);
+      wlr_scene_buffer_copy_color(copy, source);
       if (ColorManager* colorManager = m_server->colorManager()) {
         colorManager->applySurfaceDescriptionToBuffer(entry->surface, copy);
       }

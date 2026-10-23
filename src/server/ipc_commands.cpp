@@ -995,7 +995,10 @@ namespace umbriel {
           {"app_id", view->appId() != nullptr ? view->appId() : ""},
           {"title", view->title() != nullptr ? view->title() : ""},
           {"transfer_function", protocolTransferFunctionName(description != nullptr ? description->tf_named : 0)},
-          {"primaries", protocolPrimariesName(description != nullptr ? description->primaries_named : 0)},
+          {"primaries",
+           description != nullptr && description->primaries_named == 0
+               ? "custom"
+               : protocolPrimariesName(description != nullptr ? description->primaries_named : 0)},
           {"max_cll", description != nullptr ? description->max_cll : 0},
           {"max_fall", description != nullptr ? description->max_fall : 0},
       };

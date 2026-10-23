@@ -2068,12 +2068,16 @@ void fx_render_pass_add_texture(struct fx_gles_render_pass* pass, const struct f
     wlr_matrix_identity(primaries_matrix);
   } else {
     float matrix[9];
-    wlr_color_primaries_transform_absolute_colorimetric(options->primaries, &primaries_srgb, matrix);
+    color_primaries_transform_relative_colorimetric(options->primaries, &primaries_srgb, matrix);
     transpose_color_matrix(primaries_matrix, matrix);
   }
   glUniform1i(shader->source_tf, color_passthrough ? 0 : source_tf);
   glUniformMatrix3fv(shader->primaries_matrix, 1, GL_FALSE, primaries_matrix);
   glUniform1f(shader->lum_multiplier, lum_multiplier);
+  glUniform2f(
+      shader->source_luminances, fx_options->luminances != NULL ? fx_options->luminances->min : 0.01f,
+      fx_options->luminances != NULL ? fx_options->luminances->max : 100.0f
+  );
   glUniform1i(shader->target_tf, color_passthrough ? 0 : target_tf);
 
   glUniform1f(shader->discard_transparent, fx_options->discard_transparent);

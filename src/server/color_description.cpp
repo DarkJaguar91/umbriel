@@ -46,6 +46,7 @@ namespace umbriel {
     const auto& b = right.data;
     return a.tf_named == b.tf_named
         && a.primaries_named == b.primaries_named
+        && (a.primaries_named != 0 || primariesEqual(left.customPrimaries, right.customPrimaries))
         && a.has_mastering_display_primaries == b.has_mastering_display_primaries
         && (!a.has_mastering_display_primaries
             || primariesEqual(a.mastering_display_primaries, b.mastering_display_primaries))
@@ -59,6 +60,8 @@ namespace umbriel {
         && left.luminances.max == right.luminances.max
         && left.luminances.reference == right.luminances.reference
         && left.luminanceMultiplier == right.luminanceMultiplier
+        && left.customLuminances == right.customLuminances
+        && left.absoluteLuminance == right.absoluteLuminance
         && left.requiresHdrOutput == right.requiresHdrOutput;
   }
 

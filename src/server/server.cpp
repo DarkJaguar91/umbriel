@@ -181,13 +181,6 @@ namespace umbriel {
       if (interfaceName == "zxdg_output_manager_v1" && server->xwayland() != nullptr) {
         return server->xwayland()->advertiseOutputManager(client, global);
       }
-      if (interfaceName == "wp_color_manager_v1") {
-        const bool wine = ColorManager::clientNeedsCompatibility(client);
-        if (server->colorManager() != nullptr && global == server->colorManager()->compatibilityGlobal()) {
-          return wine;
-        }
-        return !wine;
-      }
       return true;
     }
 

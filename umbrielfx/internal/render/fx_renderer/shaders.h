@@ -140,6 +140,7 @@ struct tex_shader {
   GLint source_tf;
   GLint primaries_matrix;
   GLint lum_multiplier;
+  GLint source_luminances;
   GLint target_tf;
   GLint pos_attrib;
 

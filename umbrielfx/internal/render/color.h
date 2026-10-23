@@ -104,6 +104,14 @@ void wlr_color_primaries_to_xyz(const struct wlr_color_primaries* primaries, flo
 void color_transform_sdr_white_point_matrix(float matrix[static 9], const float white[static 3]);
 
 /**
+ * Convert linear RGB between primary sets with Bradford white adaptation.
+ * Equal white points retain the absolute-colorimetric conversion unchanged.
+ */
+void color_primaries_transform_relative_colorimetric(
+    const struct wlr_color_primaries* source, const struct wlr_color_primaries* destination, float matrix[static 9]
+);
+
+/**
  * Get default luminances for a transfer function.
  */
 void wlr_color_transfer_function_get_default_luminance(

@@ -339,6 +339,14 @@ struct wlr_scene_buffer {
    * The identity value is 1.0.
    */
   float luminance_multiplier;
+
+  // Optional primary coordinates and luminances. A zero reference leaves the
+  // transfer function's default luminances in effect.
+  bool has_custom_primaries;
+  struct wlr_color_primaries custom_primaries;
+  struct wlr_color_luminances luminances;
+  // Windows-scRGB uses absolute light on PQ outputs, independent of SDR white.
+  bool absolute_luminance;
 };
 
 /** A viewport for an output in the scene-graph */
@@ -635,6 +643,9 @@ struct wlr_scene_surface_color_state {
   enum wlr_color_transfer_function transfer_function;
   enum wlr_color_named_primaries primaries;
   float luminance_multiplier;
+  const struct wlr_color_primaries* custom_primaries;
+  struct wlr_color_luminances luminances;
+  bool absolute_luminance;
 };
 
 typedef void (*wlr_scene_surface_color_resolver_func_t)(
@@ -1016,6 +1027,19 @@ void wlr_scene_buffer_set_transfer_function(
 void wlr_scene_buffer_set_primaries(struct wlr_scene_buffer* scene_buffer, enum wlr_color_named_primaries primaries);
 
 void wlr_scene_buffer_set_luminance_multiplier(struct wlr_scene_buffer* scene_buffer, float multiplier);
+
+/** NULL removes custom coordinates and restores the buffer's named primaries. */
+void wlr_scene_buffer_set_custom_primaries(
+    struct wlr_scene_buffer* scene_buffer, const struct wlr_color_primaries* primaries
+);
+
+/** NULL or a zero reference restores transfer-function luminance defaults. */
+void wlr_scene_buffer_set_luminances(
+    struct wlr_scene_buffer* scene_buffer, const struct wlr_color_luminances* luminances, bool absolute
+);
+
+/** Copy color metadata, including optional coordinates, luminances and YUV state. */
+void wlr_scene_buffer_copy_color(struct wlr_scene_buffer* dst, const struct wlr_scene_buffer* src);
 
 void wlr_scene_buffer_set_color_encoding(struct wlr_scene_buffer* scene_buffer, enum wlr_color_encoding encoding);
 

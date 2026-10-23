@@ -19,8 +19,11 @@ namespace umbriel {
 
   struct ColorDescription {
     wlr_image_description_v1_data data{};
+    wlr_color_primaries customPrimaries{};
     ColorLuminances luminances;
     float luminanceMultiplier = 1.0F;
+    bool customLuminances = false;
+    bool absoluteLuminance = false;
     bool requiresHdrOutput = false;
   };
 

@@ -440,6 +440,45 @@ void wlr_color_primaries_transform_absolute_colorimetric(
   wlr_matrix_multiply(matrix, xyz_to_destination, source_to_xyz);
 }
 
+void color_primaries_transform_relative_colorimetric(
+    const struct wlr_color_primaries* source, const struct wlr_color_primaries* destination, float matrix[static 9]
+) {
+  if (source->white.x == destination->white.x && source->white.y == destination->white.y) {
+    wlr_color_primaries_transform_absolute_colorimetric(source, destination, matrix);
+    return;
+  }
+
+  float source_to_xyz[9], destination_to_xyz[9], xyz_to_destination[9];
+  wlr_color_primaries_to_xyz(source, source_to_xyz);
+  wlr_color_primaries_to_xyz(destination, destination_to_xyz);
+  matrix_invert(xyz_to_destination, destination_to_xyz);
+
+  float source_white[3], destination_white[3];
+  xy_to_xyz(source_white, source->white);
+  xy_to_xyz(destination_white, destination->white);
+
+  float bradford[9] = {
+      0.8951f, 0.2664f, -0.1614f, -0.7502f, 1.7135f, 0.0367f, 0.0389f, -0.0685f, 1.0296f,
+  };
+  float bradford_inverse[9], source_cones[3], destination_cones[3];
+  matrix_invert(bradford_inverse, bradford);
+  multiply_matrix_vector(source_cones, bradford, source_white);
+  multiply_matrix_vector(destination_cones, bradford, destination_white);
+
+  float adapted_cones[9];
+  for (size_t row = 0; row < 3; ++row) {
+    const float scale = destination_cones[row] / source_cones[row];
+    for (size_t col = 0; col < 3; ++col) {
+      adapted_cones[row * 3 + col] = bradford[row * 3 + col] * scale;
+    }
+  }
+
+  float adaptation_xyz[9], adapted_source[9];
+  wlr_matrix_multiply(adaptation_xyz, bradford_inverse, adapted_cones);
+  wlr_matrix_multiply(adapted_source, adaptation_xyz, source_to_xyz);
+  wlr_matrix_multiply(matrix, xyz_to_destination, adapted_source);
+}
+
 void wlr_color_transfer_function_get_default_luminance(
     enum wlr_color_transfer_function tf, struct wlr_color_luminances* lum
 ) {

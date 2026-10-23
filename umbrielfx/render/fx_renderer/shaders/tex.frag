@@ -28,6 +28,7 @@ uniform float alpha;
 uniform int source_tf;
 uniform mat3 primaries_matrix;
 uniform float lum_multiplier;
+uniform vec2 source_luminances;
 uniform int target_tf;
 
 #define TRANSFER_FUNCTION_PASSTHROUGH 0
@@ -97,8 +98,8 @@ vec3 pq_color_to_linear(vec3 color) {
 }
 
 vec3 bt1886_color_to_linear(vec3 color) {
-  float l_min = 0.01;
-  float l_max = 100.0;
+  float l_min = source_luminances.x;
+  float l_max = source_luminances.y;
   float lb = pow(l_min, 1.0 / 2.4);
   float lw = pow(l_max, 1.0 / 2.4);
   float a = pow(lw - lb, 2.4);
@@ -122,7 +123,11 @@ vec4 convert_color(vec4 color) {
 
   float color_alpha = color.a;
   vec3 rgb = color_alpha == 0.0 ? vec3(0.0) : color.rgb / color_alpha;
-  rgb = max(rgb, vec3(0.0));
+  // Extended-linear negative channels carry colors outside the source gamut.
+  // Preserve them through the primary conversion and linear blend buffer.
+  if (source_tf != TRANSFER_FUNCTION_EXT_LINEAR) {
+    rgb = max(rgb, vec3(0.0));
+  }
 
   if (source_tf == TRANSFER_FUNCTION_SRGB) {
     rgb = srgb_color_to_linear(rgb);

@@ -269,17 +269,34 @@ texture, while transform and renderer destruction both release the cache entry.
 
 ## Client color descriptions
 
-Umbriel's `ColorManager` owns the color-management protocol for native and Wine
-clients. Native clients receive a version 2 global with the ordinary supported
-feature set. Wine clients receive a separately filtered compatibility global
-that also exposes Windows-scRGB and, when available, Windows BT.2100. Both
-globals share surface state and the scene color resolver.
+Umbriel's `ColorManager` exposes one `wp_color_manager_v1` global to native
+and Wine clients. Its maximum version is 3 when the build's Wayland protocols
+include Windows BT.2100, or 2 otherwise. Clients can bind earlier versions.
+All clients receive the same supported features: `parametric`, `set_primaries`,
+`set_luminances`, `set_mastering_display_primaries`, `extended_target_volume`,
+and `windows_scrgb`. Version 3 clients also receive `windows_bt2100` when
+available.
+
+These six features satisfy nested Gamescope's color-management capability gate.
+Gamescope can submit PQ or Windows-scRGB through the standard protocol, including
+its HDR inverse tone-mapping path. A separate frog protocol is unnecessary.
 
 Surface descriptions use `wlr_surface_synced` so cached commits and synchronized
-subsurfaces apply color metadata with the matching buffer. Destroying a
-`wl_surface` leaves its color-management resource inert. Surface preferences
-follow actual output membership, preferring an HDR output when a surface spans
-SDR and HDR outputs.
+subsurfaces apply color metadata with the matching buffer. Primaries can be named
+or explicit CIE xy coordinates. Custom luminances retain their minimum, maximum,
+and reference values, including when set before the transfer function. For PQ,
+the protocol fixes maximum luminance to minimum plus 10000 cd/m² and ignores the
+supplied maximum. The renderer adapts custom white points with Bradford and
+anchors custom luminances at black and reference white. BT.1886 decoding also
+uses its declared black and white levels. Invalid luminance
+ranges and duplicate setters produce protocol errors. Degenerate primary
+matrices fail the image description without disconnecting the client.
+
+Destroying a `wl_surface` leaves its color-management resource inert. Surface
+preferences follow actual output membership, preferring an HDR output when a
+surface spans SDR and HDR outputs. A committed custom range whose maximum exceeds
+reference white requests automatic HDR while its fullscreen view is visible.
+Unsetting or destroying the color object releases that request.
 
 For an active PQ output, output descriptions and preferred surface descriptions
 advertise the configured `sdr_white` as their reference luminance. The primary
@@ -297,25 +314,32 @@ description. Unchanged descriptions produce no notification.
 
 Windows-scRGB and generic extended-linear content share the same transfer
 function, but not the same reference-white convention. Windows-scRGB defines a
-linear value of 1.0 as 80 cd/m2 and uses 2.5375, or 203 cd/m2, when compositor
+linear value of 1.0 as 80 cd/m² and uses 2.5375, or 203 cd/m², when compositor
 processing needs an assumed reference white. Treating every extended-linear
 buffer as Windows-scRGB would incorrectly dim parametric extended-linear
 content.
 
 Umbriel therefore marks only image descriptions created by
-`create_windows_scrgb` with an `umbrielfx` luminance multiplier of `80 / 203`.
-`umbrielfx` applies that multiplier while normalizing the buffer into its
-reference-white-relative blend space. The output transform subsequently maps
-the normalized reference white to the configured output `sdr_white` level.
-Buffers using this multiplier cannot use direct scanout because scanout would
-bypass the conversion.
+`create_windows_scrgb` as absolute-luminance content with an `umbrielfx` multiplier
+of `80 / 203`. While composing into PQ, the renderer additionally compensates for
+the output reference white before the output transform. A sample of 1.0 therefore
+remains 80 cd/m² when `sdr_white` changes from 203 to 500; the setting still changes
+ordinary SDR content. Generic parametric extended-linear content retains its
+reference-relative behavior.
+
+Extended-linear negative channels survive the source primary conversion and
+FP16 blend buffer. They represent colors outside the source's named gamut and
+must not be clamped before converting into the target gamut. Values above 1.0
+retain highlight headroom. Buffers requiring these conversions cannot use direct
+scanout because it would bypass composition.
 
 ## Scene color mirrors and snapshots
 
-Scene surfaces resolve their committed transfer function, primaries, and
-luminance multiplier during surface reconfiguration. Umbriel's color resolver
-overrides the natural wlroots state once, before guarded scene setters run, for
-both native and Wine clients. Unchanged descriptions and callback-only commits
+Scene surfaces resolve their committed transfer function, named or custom
+primaries, luminances, absolute-luminance flag, and luminance multiplier during
+surface reconfiguration. Umbriel's color resolver overrides the natural wlroots
+state once, before guarded scene setters run, for both native and Wine clients.
+Unchanged descriptions and callback-only commits
 leave the existing color state intact. Synchronized subsurfaces resolve only
 their applied state, keeping cached metadata aligned with its buffer.
 
@@ -352,9 +376,14 @@ synchronized and desynchronized subsurfaces through captured pixel damage.
 `render/window_capture_color` compares numeric output and isolated window
 capture pixels through transfer-function and primaries changes, synchronized
 commits, color-object destruction without a commit, and client teardown.
+`render/color_parametric` checks raw versus named primaries, changes to maximum
+and reference luminance, automatic HDR requests, and live overview previews
+through the same root and child surface lifecycles.
 
 Overview cards, desktop mirrors, close snapshots, and resize snapshots use raw
 scene buffers outside the surface resolver. Their copy paths therefore apply the
 manager's authoritative committed description directly after copying scene
-properties. This preserves PQ BT.2020 and Windows-scRGB metadata even when a
-copy is created directly from a surface commit.
+properties. This preserves PQ BT.2020, Windows-scRGB, custom primaries and
+luminances even when a copy is created directly from a surface commit. Optional
+scene-buffer color state is copied together with the existing scene properties;
+unset and destruction clear it across the main scene and capture scenes.

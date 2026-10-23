@@ -885,6 +885,7 @@ struct render_data {
   float audio[FX_AUDIO_VALUES];
 
   struct wlr_scene_output* output;
+  bool hdr;
 
   struct wlr_render_pass* render_pass;
   pixman_region32_t damage;
@@ -2792,6 +2793,41 @@ void wlr_scene_buffer_set_luminance_multiplier(struct wlr_scene_buffer* scene_bu
   scene_node_update(&scene_buffer->node, NULL);
 }
 
+void wlr_scene_buffer_set_custom_primaries(
+    struct wlr_scene_buffer* scene_buffer, const struct wlr_color_primaries* primaries
+) {
+  bool enabled = primaries != NULL;
+  if (scene_buffer->has_custom_primaries == enabled
+      && (!enabled || memcmp(&scene_buffer->custom_primaries, primaries, sizeof(*primaries)) == 0)) {
+    return;
+  }
+  scene_buffer->has_custom_primaries = enabled;
+  scene_buffer->custom_primaries = enabled ? *primaries : (struct wlr_color_primaries){0};
+  scene_node_update(&scene_buffer->node, NULL);
+}
+
+void wlr_scene_buffer_set_luminances(
+    struct wlr_scene_buffer* scene_buffer, const struct wlr_color_luminances* luminances, bool absolute
+) {
+  struct wlr_color_luminances value = luminances != NULL ? *luminances : (struct wlr_color_luminances){0};
+  if (memcmp(&scene_buffer->luminances, &value, sizeof(value)) == 0 && scene_buffer->absolute_luminance == absolute) {
+    return;
+  }
+  scene_buffer->luminances = value;
+  scene_buffer->absolute_luminance = absolute;
+  scene_node_update(&scene_buffer->node, NULL);
+}
+
+void wlr_scene_buffer_copy_color(struct wlr_scene_buffer* dst, const struct wlr_scene_buffer* src) {
+  wlr_scene_buffer_set_transfer_function(dst, src->transfer_function);
+  wlr_scene_buffer_set_primaries(dst, src->primaries);
+  wlr_scene_buffer_set_custom_primaries(dst, src->has_custom_primaries ? &src->custom_primaries : NULL);
+  wlr_scene_buffer_set_luminances(dst, &src->luminances, src->absolute_luminance);
+  wlr_scene_buffer_set_luminance_multiplier(dst, src->luminance_multiplier);
+  wlr_scene_buffer_set_color_encoding(dst, src->color_encoding);
+  wlr_scene_buffer_set_color_range(dst, src->color_range);
+}
+
 void wlr_scene_buffer_set_color_encoding(
     struct wlr_scene_buffer* scene_buffer, enum wlr_color_encoding color_encoding
 ) {
@@ -3317,7 +3353,12 @@ static void scene_entry_render(struct render_list_entry* entry, const struct ren
     struct wlr_scene_buffer* scene_buffer = wlr_scene_buffer_from_node(node);
     struct fx_corner_radii buffer_corners = scene_buffer->corners;
 
-    if (scene_buffer->is_single_pixel_buffer) {
+    if (scene_buffer->is_single_pixel_buffer
+        && scene_buffer->transfer_function == 0
+        && !scene_buffer->has_custom_primaries
+        && scene_buffer->luminances.reference == 0.0f
+        && scene_buffer->luminance_multiplier == 1.0f
+        && !scene_buffer->absolute_luminance) {
       // TODO: Render blur/rounded corners/etc here:
 
       // Render the buffer as a rect, this is likely to be more efficient
@@ -3371,7 +3412,11 @@ static void scene_entry_render(struct render_list_entry* entry, const struct ren
       named_primaries = WLR_COLOR_NAMED_PRIMARIES_SRGB;
     }
     struct wlr_color_primaries primaries;
-    wlr_color_primaries_from_named(&primaries, named_primaries);
+    if (scene_buffer->has_custom_primaries) {
+      primaries = scene_buffer->custom_primaries;
+    } else {
+      wlr_color_primaries_from_named(&primaries, named_primaries);
+    }
 
     struct wlr_color_luminances src_lum, srgb_lum;
     enum wlr_color_transfer_function source_tf = scene_buffer->transfer_function;
@@ -3379,13 +3424,26 @@ static void scene_entry_render(struct render_list_entry* entry, const struct ren
       source_tf = WLR_COLOR_TRANSFER_FUNCTION_SRGB;
     }
     wlr_color_transfer_function_get_default_luminance(source_tf, &src_lum);
-    if (scene_buffer->transfer_function == WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ
+    if (scene_buffer->luminances.reference > 0.0f) {
+      src_lum = scene_buffer->luminances;
+    }
+    if (scene_buffer->luminances.reference == 0.0f
+        && scene_buffer->transfer_function == WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ
         && data->output->sdr_white_level > 0.0f) {
       src_lum.reference = data->output->sdr_white_level;
     }
     wlr_color_transfer_function_get_default_luminance(WLR_COLOR_TRANSFER_FUNCTION_SRGB, &srgb_lum);
-    float luminance_multiplier = get_luminance_multiplier(&src_lum, &srgb_lum);
+    // Custom descriptions anchor their black at blend zero and reference white
+    // at blend one. Keep the established default conversion for named content.
+    float luminance_multiplier = scene_buffer->luminances.reference > 0.0f
+        ? (src_lum.max - src_lum.min) / (src_lum.reference - src_lum.min)
+        : get_luminance_multiplier(&src_lum, &srgb_lum);
     luminance_multiplier *= scene_buffer->luminance_multiplier;
+    if (scene_buffer->absolute_luminance && data->hdr && data->output->sdr_white_level > 0.0f) {
+      struct wlr_color_luminances pq_lum;
+      wlr_color_transfer_function_get_default_luminance(WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ, &pq_lum);
+      luminance_multiplier *= pq_lum.reference / data->output->sdr_white_level;
+    }
 
     // A destination extent is derived from logical edges, so it can differ
     // from the source extent by a fraction of a texel (a clip to XDG
@@ -3488,6 +3546,7 @@ static void scene_entry_render(struct render_list_entry* entry, const struct ren
         .corners = fx_corner_radii_scale(buffer_corners, data->scale),
         .clipped_region = {0},
         .sample_box = sample_box,
+        .luminances = scene_buffer->luminances.reference > 0.0f ? &scene_buffer->luminances : NULL,
     };
 
     // TODO: Use the base wlr_render_pass_add_texture as a fast-path in the future
@@ -5096,6 +5155,11 @@ struct render_list_constructor_data {
 
 static bool scene_buffer_matches_background(struct wlr_scene_buffer* scene_buffer, const float background[static 4]) {
   if (!scene_buffer->is_single_pixel_buffer
+      || scene_buffer->transfer_function != 0
+      || scene_buffer->has_custom_primaries
+      || scene_buffer->luminances.reference > 0.0f
+      || scene_buffer->luminance_multiplier != 1.0f
+      || scene_buffer->absolute_luminance
       || scene_buffer->opacity != 1.0
       || !fx_corner_radii_is_empty(&scene_buffer->corners)) {
     return false;
@@ -5233,7 +5297,10 @@ static void scene_buffer_send_dmabuf_feedback(
 static bool color_management_is_scanout_allowed(
     const struct wlr_output_image_description* img_desc, const struct wlr_scene_buffer* buffer
 ) {
-  if (buffer->luminance_multiplier != 1.0f) {
+  if (buffer->luminance_multiplier != 1.0f
+      || buffer->has_custom_primaries
+      || buffer->luminances.reference > 0.0f
+      || buffer->absolute_luminance) {
     return false;
   }
 
@@ -5830,6 +5897,9 @@ static bool scene_output_build_state(
       .scale = output->scale,
       .logical = {.x = scene_output->x, .y = scene_output->y},
       .output = scene_output,
+      .hdr = output_pending_image_description(output, state) != NULL
+          && output_pending_image_description(output, state)->transfer_function
+              == WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
       .effects = effects,
       .transient_effects = transient_effects,
   };

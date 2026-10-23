@@ -1,6 +1,8 @@
 #include "render/fx_renderer/effect.h"
 #include "render_fixture.h"
 
+#include <wlr/interfaces/wlr_buffer.h>
+
 static bool submit_solid_frame(struct wlr_render_pass* pass, int width, int height, float red) {
   wlr_render_pass_add_rect(
       pass,
@@ -1011,6 +1013,397 @@ static uint32_t select_10bit_format(struct fixture* fixture) {
     return DRM_FORMAT_XBGR2101010;
   }
   return DRM_FORMAT_INVALID;
+}
+
+// A real pixel buffer imported by the renderer, without first painting its
+// extended-range values through another compositor render pass.
+struct linear_test_buffer {
+  struct wlr_buffer base;
+  uint16_t pixels[2][4];
+};
+
+static void linear_buffer_destroy(struct wlr_buffer* base) {
+  struct linear_test_buffer* buffer = wl_container_of(base, buffer, base);
+  free(buffer);
+}
+
+static bool
+linear_buffer_begin_access(struct wlr_buffer* base, uint32_t flags, void** data, uint32_t* format, size_t* stride) {
+  if (flags & WLR_BUFFER_DATA_PTR_ACCESS_WRITE) {
+    return false;
+  }
+  struct linear_test_buffer* buffer = wl_container_of(base, buffer, base);
+  *data = buffer->pixels;
+  *format = DRM_FORMAT_ABGR16161616F;
+  *stride = base->width * sizeof(buffer->pixels[0]);
+  return true;
+}
+
+static void linear_buffer_end_access(struct wlr_buffer* base) { (void)base; }
+
+static const struct wlr_buffer_impl linear_buffer_impl = {
+    .destroy = linear_buffer_destroy,
+    .begin_data_ptr_access = linear_buffer_begin_access,
+    .end_data_ptr_access = linear_buffer_end_access,
+};
+
+static struct wlr_buffer* create_linear_buffer(const float pixels[static 2][4]) {
+  struct linear_test_buffer* buffer = calloc(1, sizeof(*buffer));
+  if (buffer == NULL) {
+    return NULL;
+  }
+  for (size_t sample = 0; sample < 2; sample++) {
+    for (size_t channel = 0; channel < 4; channel++) {
+      buffer->pixels[sample][channel] = float_to_half(pixels[sample][channel]);
+    }
+  }
+  wlr_buffer_init(&buffer->base, &linear_buffer_impl, 2, 1);
+  return &buffer->base;
+}
+
+static bool enable_color_scene_output(struct fixture* fixture) {
+  struct wlr_output_state state;
+  wlr_output_state_init(&state);
+  wlr_output_state_set_enabled(&state, true);
+  wlr_output_state_set_custom_mode(&state, TEST_WIDTH, TEST_HEIGHT, 0);
+  bool ok = wlr_output_commit_state(fixture->output, &state);
+  wlr_output_state_finish(&state);
+  return check(ok, "enable color scene output");
+}
+
+// Present each frame to consume damage. Metadata setters must then damage a
+// static scene themselves instead of relying on source-buffer repaint damage.
+static bool render_metadata_scene(
+    struct fixture* fixture, struct wlr_scene_output* scene_output, bool hdr, uint8_t pixels[static 2][4]
+) {
+  struct wlr_output_state state;
+  wlr_output_state_init(&state);
+  const struct wlr_output_image_description description = {
+      .primaries = WLR_COLOR_NAMED_PRIMARIES_BT2020,
+      .transfer_function = WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ,
+  };
+  bool ok = wlr_output_state_set_image_description(&state, hdr ? &description : NULL)
+      && check(wlr_scene_output_build_state(scene_output, &state, NULL), "render color metadata scene")
+      && check(state.buffer != NULL, "color metadata scene produced a buffer");
+  for (size_t sample = 0; ok && sample < 2; sample++) {
+    ok = fixture_read_display_pixel(
+        fixture, state.buffer, (2 * sample + 1) * TEST_WIDTH / 4, TEST_HEIGHT / 2, pixels[sample]
+    );
+  }
+  if (ok) {
+    // The headless backend supports SDR presentation; exercise pending HDR
+    // rendering without asking it to validate a physical HDR output mode.
+    struct wlr_output_state present = state;
+    present.committed &= ~WLR_OUTPUT_STATE_IMAGE_DESCRIPTION;
+    ok = check(wlr_output_commit_state(fixture->output, &present), "present color metadata scene");
+  }
+  wlr_output_state_finish(&state);
+  return ok;
+}
+
+static bool check_pq_scene_pixel(const uint8_t pixel[static 4], const float nits[static 3], const char* label) {
+  bool ok = true;
+  for (size_t channel = 0; channel < 3; channel++) {
+    int expected = to_u8(linear_to_pq(nits[channel] / 10000.0f));
+    int actual = pixel[2 - channel];
+    if (abs(actual - expected) > 2) {
+      fprintf(stderr, "FAIL: %s channel %zu: PQ code %d, expected %d\n", label, channel, actual, expected);
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+static bool test_scene_custom_color(struct fixture* fixture) {
+  if (!enable_color_scene_output(fixture)) {
+    return false;
+  }
+  const float source_pixels[2][4] = {{0.25f, 0.5f, 0.125f, 1.0f}, {0.25f, 0.5f, 0.125f, 1.0f}};
+  struct wlr_buffer* source = create_linear_buffer(source_pixels);
+  struct wlr_scene* scene = wlr_scene_create();
+  struct wlr_scene_output* output = scene != NULL ? wlr_scene_output_create(scene, fixture->output) : NULL;
+  struct wlr_scene_buffer* original = scene != NULL ? wlr_scene_buffer_create(&scene->tree, source) : NULL;
+  struct wlr_scene_buffer* copy = scene != NULL ? wlr_scene_buffer_create(&scene->tree, source) : NULL;
+  bool ok = check(source != NULL && output != NULL && original != NULL && copy != NULL, "create custom color scene");
+  if (!ok) {
+    goto out;
+  }
+  wlr_scene_output_set_direct_scanout_enabled(output, false);
+  wlr_scene_output_set_sdr_white_level(output, 203.0f);
+  wlr_scene_buffer_set_dest_size(original, TEST_WIDTH, TEST_HEIGHT);
+  wlr_scene_buffer_set_dest_size(copy, TEST_WIDTH, TEST_HEIGHT);
+  wlr_scene_buffer_set_filter_mode(original, WLR_SCALE_FILTER_NEAREST);
+  wlr_scene_buffer_set_filter_mode(copy, WLR_SCALE_FILTER_NEAREST);
+  wlr_scene_node_set_enabled(&copy->node, false);
+  wlr_scene_buffer_set_transfer_function(original, WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR);
+  wlr_scene_buffer_set_primaries(original, WLR_COLOR_NAMED_PRIMARIES_SRGB);
+  uint8_t shown[2][4] = {0};
+  // Initialize the backend's SDR swapchain before using pending HDR states.
+  ok = render_metadata_scene(fixture, output, false, shown) && ok;
+  ok = render_metadata_scene(fixture, output, true, shown) && ok;
+  // Independently rounded sRGB to BT.2020 primary conversion.
+  const float baseline[3] = {
+      (0.627404f * 0.25f + 0.329283f * 0.5f + 0.043313f * 0.125f) * 203.0f,
+      (0.069097f * 0.25f + 0.919540f * 0.5f + 0.011362f * 0.125f) * 203.0f,
+      (0.016392f * 0.25f + 0.088013f * 0.5f + 0.895595f * 0.125f) * 203.0f,
+  };
+  ok = check_pq_scene_pixel(shown[0], baseline, "named sRGB baseline") && ok;
+  ok = check(!wlr_scene_output_needs_frame(output), "presented color scene has no pending frame") && ok;
+
+  struct wlr_color_primaries bt2020;
+  wlr_color_primaries_from_named(&bt2020, WLR_COLOR_NAMED_PRIMARIES_BT2020);
+  wlr_scene_buffer_set_custom_primaries(original, &bt2020);
+  ok = check(wlr_scene_output_needs_frame(output), "custom primary change damages a static scene") && ok;
+  ok = render_metadata_scene(fixture, output, true, shown) && ok;
+  const float custom_primaries_light[3] = {0.25f * 203.0f, 0.5f * 203.0f, 0.125f * 203.0f};
+  ok = check_pq_scene_pixel(shown[0], custom_primaries_light, "custom BT.2020 overrides named sRGB") && ok;
+  const struct wlr_color_luminances luminances = {.min = 0.0f, .max = 1000.0f, .reference = 203.0f};
+  wlr_scene_buffer_set_luminances(original, &luminances, true);
+  ok = check(wlr_scene_output_needs_frame(output), "custom luminance change damages a static scene") && ok;
+  ok = render_metadata_scene(fixture, output, true, shown) && ok;
+  const float custom_light[3] = {250.0f, 500.0f, 125.0f};
+  ok = check_pq_scene_pixel(shown[0], custom_light, "custom luminances change light output") && ok;
+
+  wlr_scene_buffer_set_luminance_multiplier(original, 0.75f);
+  wlr_scene_buffer_copy_color(copy, original);
+  wlr_scene_node_set_enabled(&original->node, false);
+  wlr_scene_node_set_enabled(&copy->node, true);
+  ok = render_metadata_scene(fixture, output, true, shown) && ok;
+  const float copied_light[3] = {187.5f, 375.0f, 93.75f};
+  ok = check_pq_scene_pixel(shown[0], copied_light, "copied primary, transfer, luminance and multiplier state") && ok;
+
+  // A copied preview/snapshot owns its metadata independently of the source.
+  wlr_scene_buffer_set_custom_primaries(original, NULL);
+  wlr_scene_buffer_set_luminances(original, NULL, false);
+  wlr_scene_buffer_set_luminance_multiplier(original, 1.0f);
+  wlr_scene_output_set_sdr_white_level(output, 500.0f);
+  ok = render_metadata_scene(fixture, output, true, shown) && ok;
+  ok = check_pq_scene_pixel(shown[0], copied_light, "copy retains independent absolute luminance state") && ok;
+
+  wlr_scene_node_set_enabled(&original->node, true);
+  wlr_scene_node_set_enabled(&copy->node, false);
+  wlr_scene_output_set_sdr_white_level(output, 203.0f);
+  ok = render_metadata_scene(fixture, output, true, shown) && ok;
+  ok = check_pq_scene_pixel(shown[0], baseline, "unsetting custom metadata restores named defaults") && ok;
+  wlr_scene_buffer_copy_color(copy, original);
+  wlr_scene_node_set_enabled(&original->node, false);
+  wlr_scene_node_set_enabled(&copy->node, true);
+  ok = render_metadata_scene(fixture, output, true, shown) && ok;
+  ok = check_pq_scene_pixel(shown[0], baseline, "copying default state clears previous custom metadata") && ok;
+out:
+  if (scene != NULL) {
+    wlr_scene_node_destroy(&scene->tree.node);
+  }
+  if (source != NULL) {
+    wlr_buffer_drop(source);
+  }
+  return ok;
+}
+
+static bool test_scene_scrgb_absolute_luminance(struct fixture* fixture) {
+  if (!enable_color_scene_output(fixture)) {
+    return false;
+  }
+  const float source_pixels[2][4] = {{1.0f, 1.0f, 1.0f, 1.0f}, {10.0f, 10.0f, 10.0f, 1.0f}};
+  struct wlr_buffer* source = create_linear_buffer(source_pixels);
+  struct wlr_scene* scene = wlr_scene_create();
+  struct wlr_scene_output* output = scene != NULL ? wlr_scene_output_create(scene, fixture->output) : NULL;
+  struct wlr_scene_buffer* content = scene != NULL ? wlr_scene_buffer_create(&scene->tree, source) : NULL;
+  bool ok = check(source != NULL && output != NULL && content != NULL, "create absolute scRGB scene");
+  if (!ok) {
+    goto out;
+  }
+  wlr_scene_output_set_direct_scanout_enabled(output, false);
+  wlr_scene_buffer_set_dest_size(content, TEST_WIDTH, TEST_HEIGHT);
+  wlr_scene_buffer_set_filter_mode(content, WLR_SCALE_FILTER_NEAREST);
+  wlr_scene_buffer_set_transfer_function(content, WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR);
+  wlr_scene_buffer_set_primaries(content, WLR_COLOR_NAMED_PRIMARIES_SRGB);
+  wlr_scene_buffer_set_luminance_multiplier(content, 80.0f / 203.0f);
+  wlr_scene_buffer_set_luminances(content, NULL, true);
+  uint8_t shown[2][4] = {0};
+  ok = render_metadata_scene(fixture, output, false, shown) && ok;
+  const float white_levels[] = {203.0f, 500.0f, 203.0f};
+  for (size_t round = 0; round < sizeof(white_levels) / sizeof(white_levels[0]); round++) {
+    wlr_scene_output_set_sdr_white_level(output, white_levels[round]);
+    ok = render_metadata_scene(fixture, output, true, shown) && ok;
+    const float reference[3] = {80.0f, 80.0f, 80.0f};
+    const float highlight[3] = {800.0f, 800.0f, 800.0f};
+    ok = check_pq_scene_pixel(shown[0], reference, "scRGB 1.0 remains 80 nits across output white transitions") && ok;
+    ok = check_pq_scene_pixel(shown[1], highlight, "scRGB highlight remains 800 nits across output white transitions")
+        && ok;
+  }
+out:
+  if (scene != NULL) {
+    wlr_scene_node_destroy(&scene->tree.node);
+  }
+  if (source != NULL) {
+    wlr_buffer_drop(source);
+  }
+  return ok;
+}
+
+static bool test_scene_custom_white(struct fixture* fixture) {
+  if (!enable_color_scene_output(fixture)) {
+    return false;
+  }
+  const float source_pixels[2][4] = {{1.0f, 1.0f, 1.0f, 1.0f}, {0.25f, 0.25f, 0.25f, 1.0f}};
+  struct wlr_buffer* source = create_linear_buffer(source_pixels);
+  struct wlr_scene* scene = wlr_scene_create();
+  struct wlr_scene_output* output = scene != NULL ? wlr_scene_output_create(scene, fixture->output) : NULL;
+  struct wlr_scene_buffer* content = scene != NULL ? wlr_scene_buffer_create(&scene->tree, source) : NULL;
+  bool ok = check(source != NULL && output != NULL && content != NULL, "create custom white scene");
+  if (!ok) {
+    goto out;
+  }
+  wlr_scene_output_set_direct_scanout_enabled(output, false);
+  wlr_scene_output_set_sdr_white_level(output, 203.0f);
+  wlr_scene_buffer_set_dest_size(content, TEST_WIDTH, TEST_HEIGHT);
+  wlr_scene_buffer_set_filter_mode(content, WLR_SCALE_FILTER_NEAREST);
+  wlr_scene_buffer_set_transfer_function(content, WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR);
+  wlr_scene_buffer_set_primaries(content, WLR_COLOR_NAMED_PRIMARIES_SRGB);
+  uint8_t shown[2][4] = {0};
+  ok = render_metadata_scene(fixture, output, false, shown) && ok;
+  struct wlr_color_primaries primaries;
+  wlr_color_primaries_from_named(&primaries, WLR_COLOR_NAMED_PRIMARIES_SRGB);
+  for (size_t round = 0; round < 3; round++) {
+    if (round == 1) {
+      primaries.white.x = 0.3457f;
+      primaries.white.y = 0.3585f;
+      wlr_scene_buffer_set_custom_primaries(content, &primaries);
+      ok = check(wlr_scene_output_needs_frame(output), "custom D50 white damages the scene") && ok;
+    } else if (round == 2) {
+      wlr_scene_buffer_set_custom_primaries(content, NULL);
+      ok = check(wlr_scene_output_needs_frame(output), "restoring D65 white damages the scene") && ok;
+    }
+    ok = render_metadata_scene(fixture, output, true, shown) && ok;
+    const float white[3] = {203.0f, 203.0f, 203.0f};
+    const float grey[3] = {50.75f, 50.75f, 50.75f};
+    ok = check_pq_scene_pixel(shown[0], white, "custom white adapts reference white to neutral D65") && ok;
+    ok = check_pq_scene_pixel(shown[1], grey, "custom white adapts grey to neutral D65") && ok;
+  }
+out:
+  if (scene != NULL) {
+    wlr_scene_node_destroy(&scene->tree.node);
+  }
+  if (source != NULL) {
+    wlr_buffer_drop(source);
+  }
+  return ok;
+}
+
+static bool test_scene_custom_bt1886(struct fixture* fixture) {
+  if (!enable_color_scene_output(fixture)) {
+    return false;
+  }
+  struct wlr_scene* scene = wlr_scene_create();
+  struct wlr_scene_output* output = scene != NULL ? wlr_scene_output_create(scene, fixture->output) : NULL;
+  struct wlr_scene_buffer* content = scene != NULL ? wlr_scene_buffer_create(&scene->tree, NULL) : NULL;
+  bool ok = check(output != NULL && content != NULL, "create custom BT.1886 scene");
+  if (!ok) {
+    goto out;
+  }
+  wlr_scene_output_set_direct_scanout_enabled(output, false);
+  wlr_scene_output_set_sdr_white_level(output, 203.0f);
+  wlr_scene_buffer_set_dest_size(content, TEST_WIDTH, TEST_HEIGHT);
+  wlr_scene_buffer_set_filter_mode(content, WLR_SCALE_FILTER_NEAREST);
+  wlr_scene_buffer_set_transfer_function(content, WLR_COLOR_TRANSFER_FUNCTION_BT1886);
+  wlr_scene_buffer_set_primaries(content, WLR_COLOR_NAMED_PRIMARIES_SRGB);
+  uint8_t shown[2][4] = {0};
+  ok = render_metadata_scene(fixture, output, false, shown) && ok;
+  const struct wlr_color_luminances luminances = {.min = 1.0f, .max = 100.0f, .reference = 80.0f};
+  const float encoded[2][2] = {{0.0f, 0.5f}, {0.895941f, 1.0f}};
+  // BT.1886 with 1-nit black, 100-nit peak and 80-nit reference, after
+  // black-point compensation. The reference lies below the encoded peak.
+  const float custom_light[2][2] = {{0.0f, 0.3205019744f}, {1.0f, 1.25316455696f}};
+  for (size_t pair = 0; pair < 2; pair++) {
+    float pixels[2][4];
+    for (size_t sample = 0; sample < 2; sample++) {
+      for (size_t channel = 0; channel < 3; channel++) {
+        pixels[sample][channel] = encoded[pair][sample];
+      }
+      pixels[sample][3] = 1.0f;
+    }
+    struct wlr_buffer* source = create_linear_buffer(pixels);
+    if (!check(source != NULL, "allocate BT.1886 source pixels")) {
+      ok = false;
+      break;
+    }
+    wlr_scene_buffer_set_buffer(content, source);
+    wlr_buffer_drop(source);
+    wlr_scene_buffer_set_luminances(content, NULL, false);
+    ok = render_metadata_scene(fixture, output, true, shown) && ok;
+    uint8_t defaults[2][4];
+    memcpy(defaults, shown, sizeof(defaults));
+    wlr_scene_buffer_set_luminances(content, &luminances, false);
+    ok = check(wlr_scene_output_needs_frame(output), "custom BT.1886 luminances damage a static scene") && ok;
+    ok = render_metadata_scene(fixture, output, true, shown) && ok;
+    for (size_t sample = 0; sample < 2; sample++) {
+      const float light = custom_light[pair][sample] * 203.0f;
+      const float nits[3] = {light, light, light};
+      ok = check_pq_scene_pixel(shown[sample], nits, "custom BT.1886 curve and reference after black compensation")
+          && ok;
+    }
+    wlr_scene_buffer_set_luminances(content, NULL, false);
+    ok = check(wlr_scene_output_needs_frame(output), "reset BT.1886 luminances damage a static scene") && ok;
+    ok = render_metadata_scene(fixture, output, true, shown) && ok;
+    ok = check(memcmp(defaults, shown, sizeof(defaults)) == 0, "clearing custom BT.1886 restores the default curve")
+        && ok;
+  }
+out:
+  if (scene != NULL) {
+    wlr_scene_node_destroy(&scene->tree.node);
+  }
+  return ok;
+}
+
+static bool test_scrgb_negative_channels(struct fixture* fixture) {
+  uint32_t format = select_10bit_format(fixture);
+  if (!check(format != DRM_FORMAT_INVALID, "find scRGB 10-bit output format")) {
+    return false;
+  }
+  struct wlr_color_primaries srgb;
+  wlr_color_primaries_from_named(&srgb, WLR_COLOR_NAMED_PRIMARIES_SRGB);
+  struct wlr_color_transform* transform = create_output_transform(
+      WLR_COLOR_NAMED_PRIMARIES_BT2020, WLR_COLOR_TRANSFER_FUNCTION_ST2084_PQ, 203.0f / 10000.0f
+  );
+  if (!check(transform != NULL, "create scRGB output transform")) {
+    return false;
+  }
+  bool ok = true;
+  const float multiplier = 80.0f / 203.0f;
+  const float levels[] = {1.0f, 10.0f};
+  for (size_t sample = 0; sample < sizeof(levels) / sizeof(levels[0]); sample++) {
+    // Independently rounded BT.2020 green in linear sRGB. Both negative
+    // channels and the green channel above one must survive until conversion.
+    const uint16_t input[4] = {
+        float_to_half(-0.587641f * levels[sample]),
+        float_to_half(1.132900f * levels[sample]),
+        float_to_half(-0.100579f * levels[sample]),
+        float_to_half(1.0f),
+    };
+    uint32_t pixel = 0;
+    ok = render_texture(
+             fixture, 1, 1, format, DRM_FORMAT_ABGR16161616F, sizeof(input), input,
+             WLR_COLOR_TRANSFER_FUNCTION_EXT_LINEAR, &srgb, &multiplier, transform, NULL, false, format, sizeof(pixel),
+             &pixel
+         )
+        && ok;
+    const int red = pixel & 1023;
+    const int green = (pixel >> 10) & 1023;
+    const int blue = (pixel >> 20) & 1023;
+    const int expected = lroundf(linear_to_pq(levels[sample] * 80.0f / 10000.0f) * 1023.0f);
+    // FP16 quantization leaves tiny residual primary components. Pre-clamping
+    // the negative input instead produces hundreds of PQ codes in red/blue.
+    if (red > 45 || blue > 45 || abs(green - expected) > 3) {
+      fprintf(
+          stderr, "FAIL: scRGB green %.0f: PQ RGB %d %d %d, expected 0 %d 0\n", levels[sample], red, green, blue,
+          expected
+      );
+      ok = false;
+    }
+  }
+  wlr_color_transform_unref(transform);
+  return ok;
 }
 
 static bool test_fp16(struct fixture* fixture, bool blur) {
@@ -2546,6 +2939,14 @@ int main(int argc, char* argv[]) {
     ok = test_implicit_srgb_target(&fixture);
   } else if (strcmp(argv[1], "scene-unset-primaries") == 0) {
     ok = test_scene_unset_primaries(&fixture);
+  } else if (strcmp(argv[1], "scene-custom-color") == 0) {
+    ok = test_scene_custom_color(&fixture);
+  } else if (strcmp(argv[1], "scene-custom-white") == 0) {
+    ok = test_scene_custom_white(&fixture);
+  } else if (strcmp(argv[1], "scene-custom-bt1886") == 0) {
+    ok = test_scene_custom_bt1886(&fixture);
+  } else if (strcmp(argv[1], "scene-scrgb-absolute-luminance") == 0) {
+    ok = test_scene_scrgb_absolute_luminance(&fixture);
   } else if (strcmp(argv[1], "hdr-white-point") == 0) {
     ok = test_hdr_white_point(&fixture);
   } else if (strcmp(argv[1], "sdr-white-point-alpha") == 0) {
@@ -2568,6 +2969,8 @@ int main(int argc, char* argv[]) {
     ok = test_pq_roundtrip(&fixture);
   } else if (strcmp(argv[1], "bt2020-to-srgb") == 0) {
     ok = test_bt2020_to_srgb(&fixture);
+  } else if (strcmp(argv[1], "scrgb-negative-channels") == 0) {
+    ok = test_scrgb_negative_channels(&fixture);
   } else if (strcmp(argv[1], "fp16-blending") == 0) {
     ok = test_fp16(&fixture, false);
   } else if (strcmp(argv[1], "fp16-blur") == 0) {

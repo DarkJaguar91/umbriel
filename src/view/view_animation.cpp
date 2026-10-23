@@ -1056,11 +1056,7 @@ namespace umbriel {
           wlr_scene_buffer_set_corner_radii(copy, src->corners);
           wlr_scene_buffer_set_corner_box(copy, &src->corner_box);
           wlr_scene_buffer_set_opacity(copy, src->opacity);
-          wlr_scene_buffer_set_transfer_function(copy, src->transfer_function);
-          wlr_scene_buffer_set_primaries(copy, src->primaries);
-          wlr_scene_buffer_set_luminance_multiplier(copy, src->luminance_multiplier);
-          wlr_scene_buffer_set_color_encoding(copy, src->color_encoding);
-          wlr_scene_buffer_set_color_range(copy, src->color_range);
+          wlr_scene_buffer_copy_color(copy, src);
           if (c->colorManager != nullptr) {
             if (wlr_scene_surface* sceneSurface = wlr_scene_surface_try_from_buffer(src)) {
               c->colorManager->applySurfaceDescriptionToBuffer(sceneSurface->surface, copy);

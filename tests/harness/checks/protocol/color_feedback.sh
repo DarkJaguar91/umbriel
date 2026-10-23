@@ -81,8 +81,7 @@ assert_surface PQ true
 
 if ! jq -se '
   any(.[]; .event == "manager" and .version == 2)
-  and any(.[]; .event == "feature" and .value == 1)
-  and all(.[]; .event != "feature" or (.value != 6 and .value != 7 and .value != 8))
+  and ([.[] | select(.event == "feature") | .value] | unique | sort) == [1, 2, 4, 5, 6, 7]
 ' "$CLIENT_LOG" > /dev/null; then
   echo "native color manager capabilities were incorrect: $(cat "$CLIENT_LOG")"
   exit 1
@@ -129,12 +128,26 @@ if ! jq -en --argjson before "$changed" --argjson after "$unchanged" '
 fi
 assert_preferred_identity "$CLIENT_LOG" 2
 
-"$CLIENT" windows-scrgb > "$UMBRIEL_RUNTIME_DIR/native-windows-scrgb.log" 2>&1
-if ! grep -q '^{"event":"unsupported_feature"}$' "$UMBRIEL_RUNTIME_DIR/native-windows-scrgb.log"; then
-  echo "native Windows scRGB request did not produce the expected protocol error"
-  exit 1
-fi
+for version in v1 v2 v3; do
+  log="$UMBRIEL_RUNTIME_DIR/native-windows-scrgb-$version.log"
+  "$CLIENT" windows-scrgb "$version" > "$log" 2>&1
+  if ! grep -q '^{"event":"windows_scrgb_ready"}$' "$log"; then
+    echo "native $version Windows scRGB request did not produce a ready description: $(cat "$log")"
+    exit 1
+  fi
+  # Gamescope requires all six advertised features even when its final buffer is PQ.
+  if ! jq -se '
+    [.[] | select(.event == "feature") | .value] as $features
+    | [1, 2, 4, 5, 6, 7] | all(. as $feature | $features | index($feature) != null)
+  ' "$log" > /dev/null; then
+    echo "native $version color manager is missing Gamescope capabilities: $(cat "$log")"
+    exit 1
+  fi
+done
+for mode in named-raw raw-named raw-raw luminances-twice invalid-maximum invalid-reference degenerate; do
+  "$CLIENT" "params-$mode" > "$UMBRIEL_RUNTIME_DIR/native-params-$mode.log" 2>&1
+done
 "$CLIENT" duplicate > "$UMBRIEL_RUNTIME_DIR/native-duplicate.log" 2>&1
 "$CLIENT" inert > "$UMBRIEL_RUNTIME_DIR/native-inert.log" 2>&1
 
-echo "native v1/v2 SDR feedback, stable identities, synchronized PQ transitions and protocol lifecycle verified"
+echo "native SDR feedback, stable identities, synchronized PQ transitions, scRGB and parametric validation verified"
