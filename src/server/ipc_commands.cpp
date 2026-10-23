@@ -678,7 +678,7 @@ namespace umbriel {
             layout = entry->second.get();
           }
         }
-        const wlr_box box = contentBoxInTile(layout->targetBox(v.get()), v->titleBarHeight());
+        const wlr_box box = workspace->presentedTiledBox(v.get(), layout);
         entry["x"] = box.x;
         entry["y"] = box.y;
       } else if (

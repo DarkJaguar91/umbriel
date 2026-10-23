@@ -336,6 +336,11 @@ default_pinned = true
 # border_color_focused = "#E5C07BFF"
 # border_color_unfocused = "#5C4A2AFF"
 
+# Hide enabled title bars only while a window is maximized to edges.
+# [[window_rule]]
+# match.is_maximized_to_edges = true
+# title_bar = "off"
+
 # Leave an application that draws its own corners and shadow undecorated.
 # [[window_rule]]
 # match.app_id = "^org[.]gnome[.]TextEditor$"

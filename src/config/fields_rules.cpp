@@ -172,6 +172,7 @@ namespace umbriel {
           strict(registry::choice("content_type", &W::matchContentType, contentTypes())),
           strict(boolean("is_focused", &W::matchFocused)),
           strict(boolean("is_floating", &W::matchFloating)),
+          strict(boolean("is_maximized_to_edges", &W::matchMaximizedToEdges)),
           strict(boolean("is_pinned", &W::matchPinned)),
           strict(boolean("is_scratchpad", &W::matchScratchpad)),
           strict(boolean("is_alone", &W::matchAlone)),

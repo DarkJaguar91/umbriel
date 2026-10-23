@@ -699,7 +699,9 @@ namespace umbriel {
 
   wlr_box Workspace::tiledArea() const { return applyLayoutStruts(usableArea(), m_layoutConfig.struts); }
 
-  wlr_box Workspace::presentedTiledBox(const View* view) const { return tiledTargetBox(view, usableArea()); }
+  wlr_box Workspace::presentedTiledBox(const View* view, const Layout* layout) const {
+    return tiledTargetBox(view, usableArea(), layout);
+  }
 
   void Workspace::detachFromLayout(View* view) {
     ScrollingLayout* scrolling = scrollingLayout();
@@ -1390,8 +1392,8 @@ namespace umbriel {
     return column >= 0 && tabGroupOf(m_layout->columns()[static_cast<size_t>(column)], view) != nullptr;
   }
 
-  wlr_box Workspace::tiledTargetBox(const View* view, const wlr_box& usable) const {
-    wlr_box target = m_layout->targetBox(view);
+  wlr_box Workspace::tiledTargetBox(const View* view, const wlr_box& usable, const Layout* layout) const {
+    wlr_box target = (layout != nullptr ? layout : m_layout.get())->targetBox(view);
     if (view == nullptr || !view->maximizedToEdges()) {
       return contentBoxInTile(target, view != nullptr ? view->titleBarHeight() : 0);
     }
@@ -1411,7 +1413,7 @@ namespace umbriel {
     }
     target.width = usable.width;
     target.height = usable.height;
-    return target;
+    return contentBoxInTile(target, view->titleBarHeight());
   }
 
   wlr_box Workspace::fullscreenTargetBox(const View* view) const {

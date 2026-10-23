@@ -28,7 +28,6 @@ namespace umbriel {
   int View::titleBarHeight() const {
     if (!wantsTitleBar(m_titleBarMode.value_or(config().appearance.titleBar.mode))
         || scheduledFullscreen()
-        || m_maximizedToEdges
         || (m_tiled && m_workspace != nullptr && m_workspace->inTabGroup(this))) {
       return 0;
     }
@@ -345,21 +344,22 @@ namespace umbriel {
       return;
     }
     const Output* output = currentOutput();
-    const ViewChromeGeometry geometry{
+    ViewChromeGeometry geometry{
         .contentX = 0,
         .contentY = 0,
         .contentWidth = contentWidth,
         .contentHeight = contentHeight,
         .borderInset = borderInset(),
-        .cornerRadius = decorationCornerRadius(),
+        .cornerRadius = m_maximizedToEdges ? 0 : decorationCornerRadius(),
         .titleBarHeight = titleBarHeight(),
         .scale = output != nullptr ? output->wlr()->scale : 1.0F,
-        .suppressed = !m_mapped || m_maximizedToEdges || scheduledFullscreen() || currentFullscreen(),
+        .suppressed = !m_mapped || scheduledFullscreen() || currentFullscreen(),
     };
-    if (m_chromeAttachment != nullptr)
-      m_chromeAttachment->layout(geometry);
     if (m_ssdFrame != nullptr)
       m_ssdFrame->layout(geometry);
+    geometry.suppressed = geometry.suppressed || m_maximizedToEdges;
+    if (m_chromeAttachment != nullptr)
+      m_chromeAttachment->layout(geometry);
   }
 
   void View::refreshConfigChrome() {

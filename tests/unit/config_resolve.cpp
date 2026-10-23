@@ -1402,4 +1402,22 @@ UMBRIEL_TEST(titleBarAutoResetsAnEarlierOverride) {
   CHECK(!(rule == other));
 }
 
+UMBRIEL_TEST(maximizedToEdgesSelectsCurrentState) {
+  Config config;
+  WindowRule restored;
+  restored.matchMaximizedToEdges = false;
+  restored.titleBar = umbriel::TitleBarMode::Forced;
+  config.windowRules.push_back(std::move(restored));
+  WindowRule maximized;
+  maximized.matchMaximizedToEdges = true;
+  maximized.titleBar = umbriel::TitleBarMode::Off;
+  config.windowRules.push_back(std::move(maximized));
+  const auto normal = umbriel::resolveWindowRules(config, "app", "title", std::nullopt, ContentType::None, {}, 0);
+  CHECK(normal.titleBar == umbriel::TitleBarMode::Forced);
+  const auto edges = umbriel::resolveWindowRules(
+      config, "app", "title", std::nullopt, ContentType::None, {.maximizedToEdges = true}, 0
+  );
+  CHECK(edges.titleBar == umbriel::TitleBarMode::Off);
+}
+
 int main() { return RUN_TESTS(); }

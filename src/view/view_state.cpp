@@ -282,6 +282,7 @@ namespace umbriel {
       }
     }
     updateForeignState();
+    refreshStateRuleEffects();
   }
 
   void View::toggleMaximizedToEdges() { setMaximizedToEdges(!m_maximizedToEdges); }
@@ -289,6 +290,10 @@ namespace umbriel {
   void View::toggleMaximized() { setMaximized(m_tiled ? !scheduledMaximized() : !m_floatingMaximized); }
 
   void View::setMaximizedLikeClientRequest(bool maximized) {
+    if (!maximized && m_maximizedToEdges) {
+      setMaximizedToEdges(false);
+      return;
+    }
     // The one implementation of the client-request target policy, shared by
     // handleRequestMaximize and the pointer gesture: a tiled window honors the
     // workspace's client_maximize, a floating window keeps the default behavior
@@ -339,6 +344,7 @@ namespace umbriel {
       showDecorations(!scheduledFullscreen());
     }
     updateForeignState();
+    refreshStateRuleEffects();
   }
 
   void View::handleRequestFullscreen() {

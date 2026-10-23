@@ -67,14 +67,14 @@ for mode in dwindle master; do
   ((y >= 28))
 done
 
-# Fullscreen and maximize-to-edges suppress the frame; normal maximize retains it.
+# Fullscreen suppresses the title bar; maximize-to-edges and normal maximize retain it.
 "$UMBRIEL" msg window-toggle-fullscreen > /dev/null
 title_bar_wait_field ssd-tile-render title_bar false
 "$UMBRIEL" settle > /dev/null
 "$UMBRIEL" msg window-toggle-fullscreen > /dev/null
 title_bar_wait_field ssd-tile-render title_bar true
 "$UMBRIEL" msg window-toggle-maximize-to-edges > /dev/null
-title_bar_wait_field ssd-tile-render title_bar false
+title_bar_wait_field ssd-tile-render title_bar true
 "$UMBRIEL" msg window-toggle-maximize-to-edges > /dev/null
 title_bar_wait_field ssd-tile-render title_bar true
 

@@ -96,7 +96,7 @@ namespace umbriel {
     [[nodiscard]] wlr_box tiledArea() const;
     // Tiled view box used for presentation. Maximize-to-edges maps the
     // scrolling strip position back into the unstrutted usable area.
-    [[nodiscard]] wlr_box presentedTiledBox(const View* view) const;
+    [[nodiscard]] wlr_box presentedTiledBox(const View* view, const Layout* layout = nullptr) const;
     // Output box a fullscreen view rests in. A member of the scrolling strip keeps its column's position, so scrolling
     // still carries it off-screen.
     [[nodiscard]] wlr_box fullscreenTargetBox(const View* view) const;
@@ -273,7 +273,7 @@ namespace umbriel {
 
     // `resized` lists the members whose assigned size this arrange changed.
     void applyPositions(bool animate, std::span<View* const> resized);
-    [[nodiscard]] wlr_box tiledTargetBox(const View* view, const wlr_box& usable) const;
+    [[nodiscard]] wlr_box tiledTargetBox(const View* view, const wlr_box& usable, const Layout* layout = nullptr) const;
     [[nodiscard]] std::unique_ptr<Layout> previewLayout() const;
     [[nodiscard]] int layoutAttachIndex(const View* view) const;
     // Resize the focused floating window by usable-area fractions; an axis

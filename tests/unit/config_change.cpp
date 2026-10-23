@@ -779,6 +779,10 @@ UMBRIEL_TEST(tearingPolicyDoesNotReapplyOutputStateOrInvalidateOverview) {
   changedFloatingMatcher.windowRules[0].matchFloating = true;
   CHECK(ConfigEffects::between(forcedByRule, changedFloatingMatcher).tearingPolicy);
 
+  Config changedEdgesMatcher = forcedByRule;
+  changedEdgesMatcher.windowRules[0].matchMaximizedToEdges = true;
+  CHECK(ConfigEffects::between(forcedByRule, changedEdgesMatcher).tearingPolicy);
+
   Config changedPinnedMatcher = forcedByRule;
   changedPinnedMatcher.windowRules[0].matchPinned = true;
   CHECK(ConfigEffects::between(forcedByRule, changedPinnedMatcher).tearingPolicy);

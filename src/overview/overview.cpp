@@ -460,16 +460,16 @@ namespace umbriel {
 
   void Overview::layoutCardChrome(Card& card, const wlr_box& world, int borderInset, double zoom, float alpha) const {
     const Output* output = card.owner != nullptr ? card.owner->output : nullptr;
-    const ViewChromeGeometry geometry{
+    ViewChromeGeometry geometry{
         .contentX = 0,
         .contentY = 0,
         .contentWidth = world.width,
         .contentHeight = world.height,
         .borderInset = borderInset,
-        .cornerRadius = card.view->decorationCornerRadius(),
+        .cornerRadius = card.view->maximizedToEdges() ? 0 : card.view->decorationCornerRadius(),
         .titleBarHeight = card.view->titleBarHeight(),
         .scale = output != nullptr ? output->wlr()->scale : 1.0F,
-        .suppressed = card.view->currentFullscreen() || card.view->maximizedToEdges(),
+        .suppressed = card.view->currentFullscreen(),
         .zoom = zoom,
     };
     const auto update = [&](const ViewChromeAttachment* live, std::unique_ptr<ViewChromeAttachment>& preview) {
@@ -485,8 +485,9 @@ namespace umbriel {
       preview->setAlpha(alpha);
       preview->layout(geometry);
     };
-    update(card.view->chromeAttachment(), card.chrome);
     update(card.view->ssdFrame(), card.frame);
+    geometry.suppressed = geometry.suppressed || card.view->maximizedToEdges();
+    update(card.view->chromeAttachment(), card.chrome);
   }
 
   void Overview::layoutCardShadow(Card& card, double zoom, float alpha) const {

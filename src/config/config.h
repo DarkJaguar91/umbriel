@@ -377,6 +377,7 @@ namespace umbriel {
   struct WindowRuleState {
     bool focused = false;
     bool floating = false;
+    bool maximizedToEdges = false;
     bool pinned = false;
     bool scratchpad = false;
     bool alone = false;
@@ -414,6 +415,7 @@ namespace umbriel {
     std::optional<ContentType> matchContentType;
     std::optional<bool> matchFocused;
     std::optional<bool> matchFloating;
+    std::optional<bool> matchMaximizedToEdges;
     std::optional<bool> matchPinned;
     std::optional<bool> matchScratchpad;
     std::optional<bool> matchAlone;
@@ -479,6 +481,7 @@ namespace umbriel {
           && matchContentType == other.matchContentType
           && matchFocused == other.matchFocused
           && matchFloating == other.matchFloating
+          && matchMaximizedToEdges == other.matchMaximizedToEdges
           && matchPinned == other.matchPinned
           && matchScratchpad == other.matchScratchpad
           && matchAlone == other.matchAlone
