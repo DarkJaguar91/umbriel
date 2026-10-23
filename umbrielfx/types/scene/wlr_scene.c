@@ -5144,7 +5144,7 @@ static bool scene_node_invisible(struct wlr_scene_node* node) {
 struct render_list_constructor_data {
   struct wlr_box box;
   struct wl_array* render_list;
-  bool calculate_visibility;
+  bool cull_background;
   bool highlight_transparent_region;
   bool fractional_scale;
   const float* background_color;
@@ -5195,7 +5195,7 @@ static bool construct_render_list_iterator(
   // covers, except under fractional scale where the damage region is expanded
   // and the rect has to be drawn to cover the seam.
   if (node->type == WLR_SCENE_NODE_RECT
-      && data->calculate_visibility
+      && data->cull_background
       && (!data->fractional_scale || data->render_list->size == 0)
       && !(data->persistent_effects && effect_over_node(node) != NULL)) {
     struct wlr_scene_rect* rect = wlr_scene_rect_from_node(node);
@@ -5207,7 +5207,7 @@ static bool construct_render_list_iterator(
 
   // Same for a single-pixel buffer of that color
   if (node->type == WLR_SCENE_NODE_BUFFER
-      && data->calculate_visibility
+      && data->cull_background
       && (!data->fractional_scale || data->render_list->size == 0)
       && !(data->persistent_effects && effect_over_node(node) != NULL)) {
     struct wlr_scene_buffer* scene_buffer = wlr_scene_buffer_from_node(node);
@@ -5933,7 +5933,11 @@ static bool scene_output_build_state(
   struct render_list_constructor_data list_con = {
       .box = render_data.logical,
       .render_list = &scene_output->render_list,
-      .calculate_visibility = scene_output->scene->calculate_visibility && !transient_effects,
+      // Blur can repaint pixels behind a clear-colored node. Keep that node
+      // in the draw list so it covers the blurred backdrop again afterwards.
+      .cull_background = scene_output->scene->calculate_visibility
+          && !transient_effects
+          && !is_scene_blur_enabled(&scene_output->scene->blur_data),
       .highlight_transparent_region = scene_output->scene->highlight_transparent_region,
       .fractional_scale = floor(render_data.scale) != render_data.scale,
       .background_color = scene_output->scene->background_color,
