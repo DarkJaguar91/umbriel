@@ -2327,9 +2327,21 @@ namespace umbriel {
         || !view->mapped()) {
       return view;
     }
+    Workspace* workspace = view->workspace();
+    const bool scrollRefocus = workspace != nullptr && workspace->scrollHoverFocusDeferred();
+    if (scrollRefocus) {
+      // Keep the refresh through rapid scroll retargets and zero-distance synthetic motion, such as button release.
+      if (workspace->arrangePending()
+          || workspace->layoutMotionActive()
+          || m_server->gestures()->movingContent()
+          || (oldX == m_cursor->x && oldY == m_cursor->y)) {
+        return view;
+      }
+      workspace->resumeScrollHoverFocus();
+    }
     // Consume the invalidation only after every hover-focus eligibility gate. PointerHover never arms it, so layout
     // motion caused by this focus cannot turn into another focus on the next input event.
-    const bool refocus = m_hoverFocusInvalidated;
+    const bool refocus = scrollRefocus || m_hoverFocusInvalidated;
     m_hoverFocusInvalidated = false;
     wlr_surface* oldSurface = nullptr;
     double oldSx = 0;

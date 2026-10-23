@@ -845,6 +845,9 @@ namespace umbriel {
       }
       scrolling->setScroll(newScroll);
       workspace->markArrange();
+      if (config().input.focus.followsMouse) {
+        workspace->deferScrollHoverFocus();
+      }
     }
 
     bool actionLayoutScrollDrag(Server& /*server*/, const Keybind& bind, std::string* error) {
@@ -1113,7 +1116,7 @@ namespace umbriel {
 
     template <int Direction> bool actionConsume(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       if (Workspace* workspace = windowActionWorkspace(server)) {
-        workspace->consumeFocused(Direction);
+        invalidateHoverFocusAfterSceneChange(server, workspace->consumeFocused(Direction));
       }
       return true;
     }
@@ -1121,9 +1124,8 @@ namespace umbriel {
     template <int Direction>
     bool actionConsumeOrExpel(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       if (Workspace* workspace = windowActionWorkspace(server)) {
-        if (!workspace->expelFocused(Direction)) {
-          workspace->consumeFocused(Direction);
-        }
+        const bool changed = workspace->expelFocused(Direction) || workspace->consumeFocused(Direction);
+        invalidateHoverFocusAfterSceneChange(server, changed);
       }
       return true;
     }
@@ -1131,7 +1133,7 @@ namespace umbriel {
     // The mirror of actionConsume: pulls the neighboring column's window in, leaving focus where it was.
     template <int Direction> bool actionConsumeFrom(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
       if (Workspace* workspace = windowActionWorkspace(server)) {
-        workspace->consumeFromFocused(Direction);
+        invalidateHoverFocusAfterSceneChange(server, workspace->consumeFromFocused(Direction));
       }
       return true;
     }

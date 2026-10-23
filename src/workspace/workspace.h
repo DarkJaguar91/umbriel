@@ -262,6 +262,10 @@ namespace umbriel {
     // Advances the motion; true while it is still running.
     bool tickLayoutMotion(double nowMsec);
     [[nodiscard]] bool layoutMotionActive() const { return m_motion.progress.animating() || !m_motion.views.empty(); }
+    // Explicit strip scrolling defers one hover refresh until its layout motion settles and the pointer moves.
+    void deferScrollHoverFocus() { m_scrollHoverFocusDeferred = true; }
+    [[nodiscard]] bool scrollHoverFocusDeferred() const { return m_scrollHoverFocusDeferred; }
+    void resumeScrollHoverFocus() { m_scrollHoverFocusDeferred = false; }
 
   private:
     void syncFloatingLayer();
@@ -317,6 +321,7 @@ namespace umbriel {
     bool m_inSwitchTransition = false;
     bool m_arrangePending = false;
     bool m_arrangeAnimate = true;
+    bool m_scrollHoverFocusDeferred = false;
     // Remembers the last state each occupancy question was answered in, so the answers are only recomputed when they
     // changed.
     bool m_refreshingAloneRules = false;

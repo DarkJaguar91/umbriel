@@ -158,10 +158,12 @@ previous hover decision once. The next eligible pointer motion can therefore
 select a newly revealed view even when both the old and new pointer coordinates
 fall inside it. After that one refresh, hover returns to geometric
 border-crossing detection so scrolling animations cannot cascade focus through
-windows moving beneath the pointer. Explicit layout scrolling is the exception:
-the strip moves without invalidating hover, and a scroll gesture owns its focus
-choice through release. Focus follows again after the pointer crosses into
-another view.
+windows moving beneath the pointer. Explicit layout scrolling stores a separate
+deferred refresh on the workspace. It survives repeated scroll commands and
+motion during pending arrangement or layout animation. After the final motion
+settles, the first eligible real pointer motion consumes that refresh; a
+zero-distance synthetic motion leaves it pending. Hover-triggered reveals never
+arm it. A scroll gesture retains its own focus choice through release.
 
 The hover decision compares against seat-global activation, not a workspace's
 remembered focus. A pinned window can retain seat focus while following the
@@ -402,7 +404,12 @@ Scrolling close restoration within a stacked neighboring column is covered by
 Scrolling reveal animations are kept from cascading hover focus by
 [`tests/harness/checks/focus/scrolling_hover_focus_stability.sh`](../../tests/harness/checks/focus/scrolling_hover_focus_stability.sh).
 Command-driven strip scrolling, resizing, column movement, and fullscreen exit
-are covered by the `focus/*_hover.sh` checks.
+are covered by the `focus/*_hover.sh` checks. `focus/layout_scroll_hover` checks
+mid-animation motion, rapid retargets, no-op scrolls at the strip's end,
+zero-distance motion, the first real motion after settling, and preservation
+of hover-reveal cascade protection. `focus/consume_hover` checks stationary
+focus preservation and first-motion refresh for consume, consume-from, and
+both consume-or-expel paths.
 Client-requested XDG fullscreen exit is covered by
 [`tests/harness/checks/focus/client_fullscreen_exit_hover.sh`](../../tests/harness/checks/focus/client_fullscreen_exit_hover.sh).
 Modifier-wheel switching and the resulting keyboard-focus handoff through an
