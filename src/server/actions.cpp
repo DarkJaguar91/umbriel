@@ -218,7 +218,7 @@ namespace umbriel {
       }
       case FocusSource::Recent:
         for (const auto& view : server.registry().placementRoots()) {
-          if (view->mapped() && view->onActiveWorkspace()) {
+          if (view->mapped() && !view->minimized() && view->onActiveWorkspace()) {
             return view.get();
           }
         }
@@ -814,6 +814,51 @@ namespace umbriel {
       }
       if (kill(pid, SIGKILL) != 0) {
         return reject(error, std::string("failed to kill window process: ") + std::strerror(errno));
+      }
+      return true;
+    }
+
+    bool actionWindowMinimize(Server& server, const Keybind& bind, std::string* error) {
+      const auto target = placementTarget(server, windowIdArg(bind));
+      if (!target.has_value()) {
+        return reject(error, target.error());
+      }
+      View* view = *target;
+      if (view == nullptr || view->minimized()) {
+        return true;
+      }
+      if (!view->minimizable()) {
+        return reject(error, "window-minimize needs a floating, unpinned window on a workspace");
+      }
+      if (!view->requestMinimize()) {
+        return reject(error, "window-minimize cannot hide a fullscreen window or one being moved or resized");
+      }
+      return true;
+    }
+
+    bool actionWindowRestoreMinimized(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      Workspace* workspace = activeWorkspace(server);
+      if (workspace == nullptr) {
+        return true;
+      }
+      View* latest = nullptr;
+      for (View* view : workspace->allViews()) {
+        if (view->mapped()
+            && view->minimized()
+            && (latest == nullptr || view->minimizeSerial() > latest->minimizeSerial())) {
+          latest = view;
+        }
+      }
+      if (latest != nullptr) {
+        server.focusView(latest, FocusReason::ForeignActivation);
+        maybeWarpCursorToWindow(server, latest);
+      }
+      return true;
+    }
+
+    bool actionWorkspaceToggleShowDesktop(Server& server, const Keybind& /*bind*/, std::string* /*error*/) {
+      if (Workspace* workspace = activeWorkspace(server)) {
+        workspace->toggleShowDesktop();
       }
       return true;
     }
@@ -1476,7 +1521,7 @@ namespace umbriel {
       View* current = placementTarget(server, {}, FocusSource::Seat).value_or(nullptr);
       for (const auto& entry : server.registry().placementRoots()) {
         View* target = entry.get();
-        if (target == current || !target->mapped() || target->workspace() == nullptr) {
+        if (target == current || !target->mapped() || target->minimized() || target->workspace() == nullptr) {
           continue;
         }
         server.focusView(target, FocusReason::ForeignActivation);
@@ -1515,7 +1560,7 @@ namespace umbriel {
       View* target = nullptr;
       for (const auto& entry : server.registry().placementRoots()) {
         View* view = entry.get();
-        if (view == focused || !view->mapped() || view->workspace() != workspace) {
+        if (view == focused || !view->mapped() || view->minimized() || view->workspace() != workspace) {
           continue;
         }
         if (view->floating() != seekFloating) {
@@ -2174,6 +2219,9 @@ namespace umbriel {
         &actionSpawn,
         &actionWindowClose,
         &actionWindowKill,
+        &actionWindowMinimize,
+        &actionWindowRestoreMinimized,
+        &actionWorkspaceToggleShowDesktop,
         &actionSessionQuit,
         &actionFocusAdjacent<-1>,
         &actionFocusAdjacent<1>,

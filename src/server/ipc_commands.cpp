@@ -120,8 +120,9 @@ namespace umbriel {
         const std::string contentTypeSuffix = contentType == "none" ? "" : " [content_type=" + contentType + "]";
         const std::string scratchpad = entry.value("scratchpad", "");
         const std::string scratchpadSuffix = scratchpad.empty() ? "" : " [scratchpad=" + scratchpad + "]";
+        const std::string_view minimizedSuffix = entry.value("minimized", false) ? " [minimized]" : "";
         std::println(
-            "{}{}{}\t{}\t[{} {}x{}{:+}{:+}]{}{}{}",
+            "{}{}{}\t{}\t[{} {}x{}{:+}{:+}]{}{}{}{}",
             entry.value("focused", false) ? "*" : (entry.value("urgent", false) ? "!" : " "),
             entry.value("xwayland", false) ? "[Xwayland] " : "", appId.empty() ? "-" : appId,
             title.empty() ? "-" : title,
@@ -129,7 +130,7 @@ namespace umbriel {
                 : entry.value("tabbed", false) ? "tab"
                                                : "tile",
             entry.value("w", 0), entry.value("h", 0), entry.value("x", 0), entry.value("y", 0), xdgTagSuffix,
-            contentTypeSuffix, scratchpadSuffix
+            contentTypeSuffix, scratchpadSuffix, minimizedSuffix
         );
       }
     }
@@ -624,7 +625,7 @@ namespace umbriel {
       entry["maximized_to_edges"] = v->maximizedToEdges();
       entry["pinned"] = v->pinned();
       // Pinned windows show on every workspace of their output.
-      entry["visible"] = v->pinned() || (v->onActiveWorkspace() && !v->tabHidden());
+      entry["visible"] = v->pinned() || (v->onActiveWorkspace() && !v->tabHidden() && !v->minimized());
       const Output* output = v->currentOutput();
       entry["output"] = output != nullptr ? output->wlr()->name : "";
       const View* parent = v->shellParent();
@@ -653,6 +654,7 @@ namespace umbriel {
       entry["tabbed"] = tabIndex >= 0;
       entry["tab_index"] = tabIndex;
       entry["tab_hidden"] = v->tabHidden();
+      entry["minimized"] = v->minimized();
       entry["snap"] = v->snapRegion() ? nlohmann::json(snapRegionName(*v->snapRegion())) : nlohmann::json(nullptr);
       entry["border_effect"] = effectSlotJson(v->effectSlot(EffectKind::Border), true);
       entry["window_effect"] = effectSlotJson(v->effectSlot(EffectKind::Window));

@@ -568,6 +568,7 @@ namespace umbriel {
   }
 
   void View::refreshStateRuleEffects() {
+    syncMinimizeEligibility();
     if (m_mapped && m_appliedRuleState != ruleState()) {
       applyDynamicRules();
     }

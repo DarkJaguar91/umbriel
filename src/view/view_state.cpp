@@ -28,6 +28,10 @@ extern "C" {
 namespace umbriel {
   namespace {
     constexpr Logger kLog("view");
+    // Orders minimized windows across the session so the latest one can be restored first.
+    uint64_t gNextMinimizeSerial = 0;
+    // xdg_toplevel.wm_capabilities; the installed protocol headers only carry the enum, not the event version.
+    constexpr int kXdgWmCapabilitiesSinceVersion = 5;
   } // namespace
 
   void View::onRequestMove(wl_listener* listener, void* data) {
@@ -43,6 +47,11 @@ namespace umbriel {
   void View::onRequestMaximize(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_requestMaximize);
     self->handleRequestMaximize();
+  }
+
+  void View::onRequestMinimize(wl_listener* listener, void* data) {
+    View* self = wl_container_of(listener, self, m_requestMinimize);
+    self->handleRequestMinimize(data);
   }
 
   void View::onAcceptClientMaximizeRequests(void* data) {
@@ -242,6 +251,111 @@ namespace umbriel {
     }
     m_consumeRestoredMaximizeRequest = false;
     setMaximizedLikeClientRequest(requestedMaximized());
+  }
+
+  void View::handleRequestMinimize(void* data) {
+    if (!m_mapped) {
+      return;
+    }
+    // xdg-shell only ever asks to minimize; X11 WM_CHANGE_STATE can also ask for NormalState.
+    const bool minimize = m_xsurface == nullptr || static_cast<wlr_xwayland_minimize_event*>(data)->minimize;
+    if (minimize) {
+      requestMinimize();
+    } else {
+      setMinimized(false);
+    }
+  }
+
+  bool View::minimizable() const {
+    return m_mapped && m_attachedTo == nullptr && !m_tiled && !m_pinned && !m_inScratchpad && m_workspace != nullptr;
+  }
+
+  bool View::requestMinimize() {
+    if (m_minimized) {
+      return true;
+    }
+    if (!minimizable()
+        || scheduledFullscreen()
+        || currentFullscreen()
+        || m_server->cursor()->isDraggingView(this)
+        || m_server->cursor()->isResizingView(this)) {
+      return false;
+    }
+    setMinimized(true);
+    return true;
+  }
+
+  void View::setMinimized(bool minimized) {
+    if (m_minimized == minimized) {
+      return;
+    }
+    // Showing a window any other way breaks the set a show-desktop toggle would restore.
+    if (!minimized && m_workspace != nullptr && m_workspace->inShowDesktop(this)) {
+      m_workspace->clearShowDesktop();
+    }
+    const View* keyboardView = View::fromSurface(m_server->seat()->wlr()->keyboard_state.focused_surface);
+    const bool heldKeyboard = keyboardView != nullptr && keyboardView->placementRoot() == this;
+    m_minimized = minimized;
+    if (minimized) {
+      m_minimizeSerial = ++gNextMinimizeSerial;
+    }
+    if (m_sceneTree != nullptr) {
+      setNodeEnabled(!minimized && m_mapped && m_onActiveWorkspace);
+    }
+    if (m_foreign != nullptr) {
+      wlr_foreign_toplevel_handle_v1_set_minimized(m_foreign, minimized);
+    }
+    if (m_xsurface != nullptr) {
+      wlr_xwayland_surface_set_minimized(m_xsurface, minimized);
+    }
+    if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
+      overview->onViewPresentationChanged(this);
+    }
+    m_server->scheduleIpcWindowsEvent();
+    m_server->cursor()->invalidateHoverFocus();
+    if (!minimized || m_workspace == nullptr) {
+      return;
+    }
+    Workspace* workspace = m_workspace;
+    if (workspace->focusedView() == this) {
+      if (View* replacement = workspace->focusReplacementForRemoval(this)) {
+        if (workspace->active() && !m_server->sessionLocked()) {
+          m_server->focusView(replacement, FocusReason::Directional);
+        } else {
+          workspace->setFocusedView(replacement);
+        }
+      } else {
+        workspace->setFocusedView(nullptr);
+      }
+    }
+    if (heldKeyboard) {
+      // Nothing else on the workspace took the keyboard, so clear it rather than leave it on a hidden window.
+      keyboardView = View::fromSurface(m_server->seat()->wlr()->keyboard_state.focused_surface);
+      if (keyboardView != nullptr && keyboardView->placementRoot() == this) {
+        m_server->refocus(workspace->group() != nullptr ? workspace->group()->output() : nullptr);
+      }
+    }
+  }
+
+  void View::syncMinimizeEligibility() {
+    if (!m_mapped) {
+      return;
+    }
+    const bool eligible = minimizable();
+    if (m_minimized && !eligible) {
+      setMinimized(false);
+    }
+    if (m_toplevel == nullptr
+        || !m_toplevel->base->initialized
+        || wl_resource_get_version(m_toplevel->resource) < kXdgWmCapabilitiesSinceVersion) {
+      return;
+    }
+    const uint32_t caps = m_toplevel->scheduled.wm_capabilities;
+    const uint32_t wanted =
+        eligible ? caps | WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE : caps & ~WLR_XDG_TOPLEVEL_WM_CAPABILITIES_MINIMIZE;
+    if (wanted != caps) {
+      wlr_xdg_toplevel_set_wm_capabilities(m_toplevel, wanted);
+    }
   }
 
   void View::setMaximizedToEdges(bool maximized, bool animate) {
@@ -628,6 +742,10 @@ namespace umbriel {
     const bool wantTiled = !floating;
     if (m_tiled == wantTiled) {
       return;
+    }
+    // A window shows before it joins the layout, which cannot hold a hidden tile.
+    if (!floating && m_minimized) {
+      setMinimized(false);
     }
     m_layoutFloated = false;
     if (!floating) {

@@ -462,6 +462,8 @@ namespace {
       return Group::MoveSize;
     case A::WindowClose:
     case A::WindowKill:
+    case A::WindowMinimize:
+    case A::WindowRestoreMinimized:
     case A::ToggleFloating:
     case A::ToggleMaximize:
     case A::ToggleMaximizeToEdges:
@@ -484,6 +486,7 @@ namespace {
     case A::ScratchpadWindowShowPrevious:
       return Group::Scratchpad;
     case A::WorkspaceSwitch:
+    case A::WorkspaceToggleShowDesktop:
     case A::ColumnMoveToWorkspace:
     case A::ColumnMoveToWorkspaceNext:
     case A::ColumnMoveToWorkspacePrevious:

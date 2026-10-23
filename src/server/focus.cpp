@@ -64,6 +64,10 @@ namespace umbriel {
         }
       }
     }
+    // Focusing a window shows it.
+    if (view->minimized()) {
+      view->setMinimized(false);
+    }
 
     if (Workspace* workspace = view->workspace()) {
       if (WorkspaceGroup* group = workspace->group(); group != nullptr && !view->pinned() && !workspace->active()) {
@@ -202,7 +206,10 @@ namespace umbriel {
 
     if (View* view = View::fromSurface(focusedSurface)) {
       // A window with a dialog attached hands the keyboard to the dialog instead of keeping it.
-      if (!view->mapped() || view->blocked() || (!view->onActiveWorkspace() && !view->pinned())) {
+      if (!view->mapped()
+          || view->blocked()
+          || view->placementRoot()->minimized()
+          || (!view->onActiveWorkspace() && !view->pinned())) {
         return false;
       }
 
@@ -321,13 +328,13 @@ namespace umbriel {
         return false;
       }
       if (View* focused = workspace->focusedView()) {
-        if (focused->mapped() && focused->onActiveWorkspace()) {
+        if (focused->mapped() && focused->onActiveWorkspace() && !focused->minimized()) {
           focusView(focused);
           return true;
         }
       }
       for (const auto& entry : m_server.registry().placementRoots()) {
-        if (entry->mapped() && entry->workspace() == workspace) {
+        if (entry->mapped() && !entry->minimized() && entry->workspace() == workspace) {
           focusView(entry.get());
           return true;
         }

@@ -214,6 +214,7 @@ namespace umbriel {
     m_requestMove.notify = onRequestMove;
     m_requestResize.notify = onRequestResize;
     m_requestMaximize.notify = onRequestMaximize;
+    m_requestMinimize.notify = onRequestMinimize;
     m_requestFullscreen.notify = onRequestFullscreen;
     m_setParent.notify = onSetParent;
     m_setTitle.notify = onSetTitle;
@@ -224,6 +225,7 @@ namespace umbriel {
       wl_signal_add(&m_toplevel->events.request_move, &m_requestMove);
       wl_signal_add(&m_toplevel->events.request_resize, &m_requestResize);
       wl_signal_add(&m_toplevel->events.request_maximize, &m_requestMaximize);
+      wl_signal_add(&m_toplevel->events.request_minimize, &m_requestMinimize);
       wl_signal_add(&m_toplevel->events.request_fullscreen, &m_requestFullscreen);
       wl_signal_add(&m_toplevel->events.set_parent, &m_setParent);
       wl_signal_add(&m_toplevel->events.set_title, &m_setTitle);
@@ -236,6 +238,7 @@ namespace umbriel {
       wl_signal_add(&m_xsurface->events.request_move, &m_requestMove);
       wl_signal_add(&m_xsurface->events.request_resize, &m_requestResize);
       wl_signal_add(&m_xsurface->events.request_maximize, &m_requestMaximize);
+      wl_signal_add(&m_xsurface->events.request_minimize, &m_requestMinimize);
       wl_signal_add(&m_xsurface->events.request_fullscreen, &m_requestFullscreen);
       wl_signal_add(&m_xsurface->events.set_parent, &m_setParent);
       wl_signal_add(&m_xsurface->events.set_title, &m_setTitle);
@@ -258,6 +261,8 @@ namespace umbriel {
         wl_signal_add(&m_foreign->events.request_activate, &m_foreignActivate);
         m_foreignClose.notify = onForeignClose;
         wl_signal_add(&m_foreign->events.request_close, &m_foreignClose);
+        m_foreignMinimize.notify = onForeignMinimize;
+        wl_signal_add(&m_foreign->events.request_minimize, &m_foreignMinimize);
         m_foreignDestroy.notify = onForeignDestroy;
         wl_signal_add(&m_foreign->events.destroy, &m_foreignDestroy);
         updateForeignIdentity();
@@ -313,8 +318,8 @@ namespace umbriel {
     }
     for (wl_listener* listener :
          {&m_map, &m_unmap, &m_commit, &m_destroy, &m_requestMove, &m_requestResize, &m_requestMaximize,
-          &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure, &m_xRequestActivate,
-          &m_xSetHints, &m_setDecorations}) {
+          &m_requestMinimize, &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure,
+          &m_xRequestActivate, &m_xSetHints, &m_setDecorations}) {
       removeListener(*listener);
     }
     if (m_rootSurfaceDestroy.link.next != nullptr) {
@@ -465,6 +470,7 @@ namespace umbriel {
     }
     if (m_mapped) {
       m_server->scheduleIpcWindowsEvent();
+      syncMinimizeEligibility();
       if (previousOutput != nullptr) {
         previousOutput->updateVrr();
         previousOutput->updateHdr();
@@ -585,8 +591,8 @@ namespace umbriel {
       return;
     }
     m_onActiveWorkspace = active;
-    // A hidden tab stays hidden when its workspace comes back.
-    const bool shown = active && !m_tabHidden;
+    // A hidden tab or a minimized window stays hidden when its workspace comes back.
+    const bool shown = active && !m_tabHidden && !m_minimized;
     if (m_sceneTree != nullptr) {
       wlr_scene_node_set_enabled(&m_sceneTree->node, shown);
     }

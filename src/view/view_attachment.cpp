@@ -170,6 +170,11 @@ namespace umbriel {
     notifyOutputScale();
     enterForeignOutput();
     m_server->scheduleIpcWindowsEvent();
+    syncMinimizeEligibility();
+    // The application waits on a modal dialog, so the window it attaches to shows.
+    if (View* root = placementRoot(); root->minimized()) {
+      root->setMinimized(false);
+    }
     if (Output* output = currentOutput()) {
       output->updateVrr();
       output->updateHdr();
@@ -228,6 +233,7 @@ namespace umbriel {
     if (heldInput) {
       m_server->focusView(this, FocusReason::Directional);
     }
+    syncMinimizeEligibility();
   }
 
   void View::releaseAttachments() {

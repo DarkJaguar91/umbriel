@@ -846,6 +846,7 @@ int main(int argc, char** argv) {
   // A toplevel that never sets a title, which is distinct from one that sets an empty title.
   const bool skipTitle = std::getenv("NO_TITLE") != nullptr;
   const bool maximizeOnStdin = std::getenv("MAXIMIZE_ON_STDIN") != nullptr;
+  const bool minimizeOnStdin = std::getenv("MINIMIZE_ON_STDIN") != nullptr;
   const bool fullscreenOnStdin = std::getenv("FULLSCREEN_ON_STDIN") != nullptr;
   const bool repaintOnStdin = std::getenv("REPAINT_ON_STDIN") != nullptr;
   const bool updateOnStdin = repaintOnStdin
@@ -853,6 +854,7 @@ int main(int argc, char** argv) {
       || updatedXdgTag != nullptr
       || updatedTitle != nullptr
       || maximizeOnStdin
+      || minimizeOnStdin
       || fullscreenOnStdin;
   if (parseContentType(initialContentType) < 0 || parseContentType(updatedContentType) < 0) {
     std::println(stderr, "unmap-client: CONTENT_TYPE values must be none, photo, video, or game");
@@ -1293,6 +1295,11 @@ int main(int argc, char** argv) {
             wl_surface_commit(state.surface);
             wl_display_flush(state.display);
             std::println("unfullscreen-requested");
+            std::fflush(stdout);
+          } else if (state.mapped && minimizeOnStdin && command == 'z') {
+            xdg_toplevel_set_minimized(state.toplevel);
+            wl_display_flush(state.display);
+            std::println("minimize-requested");
             std::fflush(stdout);
           } else if (
               state.mapped && updateOnStdin && command == 't' && updatedTitle != nullptr && !state.titleUpdated

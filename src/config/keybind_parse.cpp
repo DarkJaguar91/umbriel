@@ -432,6 +432,8 @@ namespace umbriel {
          KeybindAction::WindowFocusWarpId, ActionArgKind::WindowId},
         {"window-kill", "[<window-id>]", "Kill the process owning the focused or given window",
          KeybindAction::WindowKill, ActionArgKind::OptionalWindowId},
+        {"window-minimize", "[<window-id>]", "Minimize the focused floating window, or the given window",
+         KeybindAction::WindowMinimize, ActionArgKind::OptionalWindowId},
         {"window-modify-height-down", "<delta>", "Resize the focused window from its bottom edge",
          KeybindAction::WindowModifyHeightDown, ActionArgKind::FractionDelta},
         {"window-modify-height-up", "<delta>", "Resize the focused window from its top edge",
@@ -496,6 +498,8 @@ namespace umbriel {
         {"window-move-up", "", "Move up in its column, or a float to the top edge", KeybindAction::WindowMoveUp},
         {"window-restore-from-scratchpad", "[<scratchpad>]", "Return a scratchpad window to its saved workspace",
          KeybindAction::WindowRestoreFromScratchpad, ActionArgKind::OptionalScratchpad},
+        {"window-restore-minimized", "", "Restore the latest minimized window on this workspace",
+         KeybindAction::WindowRestoreMinimized},
         {"window-set-primary-extent", "<fraction>", "Set the focused area's primary extent fraction",
          KeybindAction::WindowSetPrimaryExtent, ActionArgKind::Fraction},
         {"window-set-secondary-extent", "<fraction>", "Set the focused area's secondary extent fraction",
@@ -550,6 +554,8 @@ namespace umbriel {
          KeybindAction::WorkspaceSwapActiveOutputUp},
         {"workspace-switch", "<workspace>[/<output>]", "Switch to the selected workspace",
          KeybindAction::WorkspaceSwitch, ActionArgKind::Workspace},
+        {"workspace-toggle-show-desktop", "", "Minimize or restore the workspace's floating windows",
+         KeybindAction::WorkspaceToggleShowDesktop},
     };
 
   } // namespace

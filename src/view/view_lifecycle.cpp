@@ -533,6 +533,11 @@ namespace umbriel {
     // Opening rules resolve before default_floating and default_pinned move the window, so the state selectors may
     // pick a different set of dynamic effects than the ones applied above.
     applyDynamicRules();
+    syncMinimizeEligibility();
+    // A new window cancels the pending show-desktop restore of its workspace.
+    if (m_workspace != nullptr) {
+      m_workspace->clearShowDesktop();
+    }
     if (draggedToplevel) {
       m_server->seat()->toplevelDrags().mapped(this, restoreTiled && !assignedScratchpad);
     }
@@ -612,6 +617,17 @@ namespace umbriel {
     }
     // Replacement focus can hide the closing tab. Capture while its current visibility still decides eligibility.
     const CloseSnapshotId snapshot = beginCloseAnimation();
+    // After the close capture, so a minimized window closes unseen. The live node is not re-enabled: a remap shows the
+    // window normally.
+    if (m_minimized) {
+      m_minimized = false;
+      if (m_foreign != nullptr) {
+        wlr_foreign_toplevel_handle_v1_set_minimized(m_foreign, false);
+      }
+    }
+    if (m_workspace != nullptr) {
+      m_workspace->forgetShowDesktop(this);
+    }
     // Choose the layout neighbor while this view still belongs to the layout. Waiting for destroy loses that position.
     // It remains the fallback when the pointer did not belong to the closing tile or no survivor takes its place.
     if (m_workspace != nullptr && m_workspace->focusedView() == this) {
@@ -1093,6 +1109,7 @@ namespace umbriel {
     if (m_foreign != nullptr) {
       wl_list_remove(&m_foreignActivate.link);
       wl_list_remove(&m_foreignClose.link);
+      wl_list_remove(&m_foreignMinimize.link);
       wl_list_remove(&m_foreignDestroy.link);
       wlr_foreign_toplevel_handle_v1_destroy(m_foreign);
       m_foreign = nullptr;
@@ -1112,8 +1129,8 @@ namespace umbriel {
 
     for (wl_listener* listener :
          {&m_map, &m_unmap, &m_commit, &m_destroy, &m_requestMove, &m_requestResize, &m_requestMaximize,
-          &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure, &m_xRequestActivate,
-          &m_xSetHints, &m_setDecorations}) {
+          &m_requestMinimize, &m_requestFullscreen, &m_setParent, &m_setTitle, &m_setAppId, &m_xRequestConfigure,
+          &m_xRequestActivate, &m_xSetHints, &m_setDecorations}) {
       removeListener(*listener);
     }
     m_sceneTree->node.data = nullptr;

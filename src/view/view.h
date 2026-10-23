@@ -293,8 +293,21 @@ namespace umbriel {
     // at that size, but its frame stays disabled whatever else asks to enable it.
     void setTabHidden(bool hidden);
     [[nodiscard]] bool tabHidden() const { return m_tabHidden; }
-    // True while nothing may show the frame: a tiled opener waiting for the arrange that places it, or a hidden tab.
-    [[nodiscard]] bool presentationSuppressed() const { return m_tiledOpeningDeferred || m_tabHidden; }
+    // Minimized: hidden, but keeping its workspace, floating box, stacking slot, and taskbar entries. Focusing the
+    // window shows it again.
+    [[nodiscard]] bool minimized() const { return m_minimized; }
+    // Only a mapped, unattached floating window on a workspace can be minimized; tiled, pinned, and scratchpad
+    // windows cannot.
+    [[nodiscard]] bool minimizable() const;
+    // Hide or show without checking eligibility. Hiding the focused window hands focus to a replacement.
+    void setMinimized(bool minimized);
+    // Minimize when eligible and not fullscreen or grabbed. True when the window is minimized afterwards.
+    bool requestMinimize();
+    // Orders minimized windows by when they were hidden; larger is more recent.
+    [[nodiscard]] uint64_t minimizeSerial() const { return m_minimizeSerial; }
+    // True while nothing may show the frame: a tiled opener waiting for the arrange that places it, a hidden tab, or a
+    // minimized window.
+    [[nodiscard]] bool presentationSuppressed() const { return m_tiledOpeningDeferred || m_tabHidden || m_minimized; }
     // Chrome carried beside the borders, its scene nodes under chromeParent(). Replacing it destroys the previous one.
     void setChromeAttachment(std::unique_ptr<ViewChromeAttachment> attachment);
     [[nodiscard]] ViewChromeAttachment* chromeAttachment() const { return m_chromeAttachment.get(); }
@@ -553,6 +566,7 @@ namespace umbriel {
     static void onRequestMove(wl_listener* listener, void* data);
     static void onRequestResize(wl_listener* listener, void* data);
     static void onRequestMaximize(wl_listener* listener, void* data);
+    static void onRequestMinimize(wl_listener* listener, void* data);
     static void onAcceptClientMaximizeRequests(void* data);
     static void onEffectSelectionIdle(void* data);
     static void onRequestFullscreen(wl_listener* listener, void* data);
@@ -563,6 +577,7 @@ namespace umbriel {
     static void onSetAppId(wl_listener* listener, void* data);
     static void onForeignActivate(wl_listener* listener, void* data);
     static void onForeignClose(wl_listener* listener, void* data);
+    static void onForeignMinimize(wl_listener* listener, void* data);
     static void onForeignDestroy(wl_listener* listener, void* data);
     static void onExtForeignDestroy(wl_listener* listener, void* data);
     static void onViewSurfaceCommit(wl_listener* listener, void* data);
@@ -579,6 +594,7 @@ namespace umbriel {
     void handleRequestMove(void* data);
     void handleRequestResize(void* data);
     void handleRequestMaximize();
+    void handleRequestMinimize(void* data);
     void setMaximized(bool maximized, bool animate = true);
     void handleRequestFullscreen();
     void recordOpeningParentRequest(bool parentRequested);
@@ -589,6 +605,10 @@ namespace umbriel {
     void handleSetAppId();
     void handleForeignActivate();
     void handleForeignClose();
+    void handleForeignMinimize(void* data);
+    // Drop the minimized state of a window that can no longer be minimized, and offer the client minimize only while
+    // it can be.
+    void syncMinimizeEligibility();
     void handleForeignDestroy();
     void handleExtForeignDestroy();
     void handleCaptureSourceDestroy();
@@ -802,7 +822,8 @@ namespace umbriel {
     // window did not open alone after all.
     void settleOpeningAloneState();
     // Re-applies dynamic effects after a float, pin, scratchpad, or alone transition, because those states select
-    // rules. A transition that also moved focus has already refreshed them, so this is a no-op there.
+    // rules. A transition that also moved focus has already refreshed them, so this is a no-op there. Also keeps the
+    // minimized state and the client's minimize capability in line with the new state.
     void refreshStateRuleEffects();
     // The live window state the `match.is_*` selectors test.
     [[nodiscard]] WindowRuleState ruleState() const;
@@ -910,6 +931,8 @@ namespace umbriel {
     int m_chromeContentWidth = 0;
     int m_chromeContentHeight = 0;
     bool m_tabHidden = false;
+    bool m_minimized = false;
+    uint64_t m_minimizeSerial = 0;
     ViewEffects m_effects;
     ViewPresentation m_presentation;
     DragPhysics m_dragPhysics;
@@ -1052,12 +1075,14 @@ namespace umbriel {
     wl_listener m_requestMove{};
     wl_listener m_requestResize{};
     wl_listener m_requestMaximize{};
+    wl_listener m_requestMinimize{};
     wl_listener m_requestFullscreen{};
     wl_listener m_setParent{};
     wl_listener m_setTitle{};
     wl_listener m_setAppId{};
     wl_listener m_foreignActivate{};
     wl_listener m_foreignClose{};
+    wl_listener m_foreignMinimize{};
     wl_listener m_foreignDestroy{};
     wl_listener m_extForeignDestroy{};
     wl_listener m_captureSourceDestroy{};

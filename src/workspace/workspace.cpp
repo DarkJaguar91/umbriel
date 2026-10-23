@@ -387,6 +387,7 @@ namespace umbriel {
     if (view == m_lastOnlyWindowView) {
       m_lastOnlyWindowView = nullptr;
     }
+    forgetShowDesktop(view);
     updateUrgent();
     std::erase(m_floatingStack, view);
     std::erase(m_switchViews, view);
@@ -1501,7 +1502,11 @@ namespace umbriel {
     }
     std::vector<LayoutTarget> targets;
     for (View* view : m_floatingStack) {
-      if (view->mapped() && !view->pinned() && !view->currentFullscreen() && !view->scheduledFullscreen()) {
+      if (view->mapped()
+          && !view->minimized()
+          && !view->pinned()
+          && !view->currentFullscreen()
+          && !view->scheduledFullscreen()) {
         const wlr_box& geo = view->geometryBox();
         targets.push_back({view, view->layoutX(), view->layoutY(), geo.width, geo.height});
       }
@@ -1571,10 +1576,10 @@ namespace umbriel {
     const int rowIndex = m_layout->rowOf(view);
     const auto& columns = m_layout->columns();
     const auto mappedCandidate = [view](View* candidate) {
-      return candidate != nullptr && candidate != view && candidate->mapped();
+      return candidate != nullptr && candidate != view && candidate->mapped() && !candidate->minimized();
     };
 
-    if (View* parent = view->shellParent(); parent != nullptr && parent->workspace() == this) {
+    if (View* parent = view->shellParent(); parent != nullptr && parent->workspace() == this && !parent->minimized()) {
       return parent;
     }
 
@@ -1582,7 +1587,7 @@ namespace umbriel {
     // workspace, since nothing else refocuses until a destroy-time fallback that unmap-only clients never reach.
     if (columnIndex < 0 || columnIndex >= static_cast<int>(columns.size())) {
       for (const auto& entry : m_group->server()->registry().placementRoots()) {
-        if (entry.get() != view && entry->mapped() && entry->workspace() == this) {
+        if (entry.get() != view && entry->mapped() && !entry->minimized() && entry->workspace() == this) {
           return entry.get();
         }
       }
@@ -1644,7 +1649,9 @@ namespace umbriel {
     for (const Column& column : m_layout->columns()) {
       ring.insert(ring.end(), column.views.begin(), column.views.end());
     }
-    ring.insert(ring.end(), m_floatingStack.begin(), m_floatingStack.end());
+    std::ranges::copy_if(m_floatingStack, std::back_inserter(ring), [](const View* view) {
+      return !view->minimized();
+    });
     if (ring.size() < 2) {
       return nullptr;
     }
@@ -1657,6 +1664,49 @@ namespace umbriel {
     const auto count = static_cast<std::ptrdiff_t>(ring.size());
     const auto target = (index + direction % count + count) % count;
     return ring[static_cast<size_t>(target)];
+  }
+
+  void Workspace::toggleShowDesktop() {
+    if (!m_showDesktopViews.empty()) {
+      // Cleared first: restoring a member would otherwise drop the set mid-loop.
+      const std::vector<View*> views = std::exchange(m_showDesktopViews, {});
+      View* focus = std::exchange(m_showDesktopFocus, nullptr);
+      for (View* view : views) {
+        view->setMinimized(false);
+      }
+      if (focus != nullptr && focus->mapped() && !focus->minimized() && focus->workspace() == this) {
+        m_group->server()->focusView(focus, FocusReason::Directional);
+      }
+      return;
+    }
+    View* focus = m_focusedView;
+    // The focused window goes last, so focus is handed on once instead of through every other window.
+    std::vector<View*> views = m_views;
+    if (const auto focused = std::ranges::find(views, focus); focused != views.end()) {
+      std::rotate(focused, std::next(focused), views.end());
+    }
+    for (View* view : views) {
+      if (!view->minimized() && view->requestMinimize()) {
+        m_showDesktopViews.push_back(view);
+      }
+    }
+    m_showDesktopFocus = m_showDesktopViews.empty() ? nullptr : focus;
+  }
+
+  bool Workspace::inShowDesktop(const View* view) const {
+    return std::ranges::find(m_showDesktopViews, view) != m_showDesktopViews.end();
+  }
+
+  void Workspace::clearShowDesktop() {
+    m_showDesktopViews.clear();
+    m_showDesktopFocus = nullptr;
+  }
+
+  void Workspace::forgetShowDesktop(const View* view) {
+    std::erase(m_showDesktopViews, view);
+    if (m_showDesktopFocus == view) {
+      m_showDesktopFocus = nullptr;
+    }
   }
 
   bool Workspace::swapFocusedInCycle(int direction) {

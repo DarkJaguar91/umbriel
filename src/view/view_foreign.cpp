@@ -89,6 +89,11 @@ namespace umbriel {
     self->handleForeignClose();
   }
 
+  void View::onForeignMinimize(wl_listener* listener, void* data) {
+    View* self = wl_container_of(listener, self, m_foreignMinimize);
+    self->handleForeignMinimize(data);
+  }
+
   void View::onForeignDestroy(wl_listener* listener, void* /*data*/) {
     View* self = wl_container_of(listener, self, m_foreignDestroy);
     self->handleForeignDestroy();
@@ -166,12 +171,26 @@ namespace umbriel {
 
   void View::handleForeignClose() { requestClose(); }
 
+  void View::handleForeignMinimize(void* data) {
+    if (!m_mapped) {
+      return;
+    }
+    // Unminimizing shows the window where it was without focusing it; a taskbar activates separately.
+    if (static_cast<wlr_foreign_toplevel_handle_v1_minimized_event*>(data)->minimized) {
+      requestMinimize();
+    } else {
+      setMinimized(false);
+    }
+  }
+
   void View::handleForeignDestroy() {
     wl_list_remove(&m_foreignActivate.link);
     wl_list_remove(&m_foreignClose.link);
+    wl_list_remove(&m_foreignMinimize.link);
     wl_list_remove(&m_foreignDestroy.link);
     m_foreignActivate.link.next = nullptr;
     m_foreignClose.link.next = nullptr;
+    m_foreignMinimize.link.next = nullptr;
     m_foreignDestroy.link.next = nullptr;
     m_foreign = nullptr;
     m_foreignOutput = nullptr;
