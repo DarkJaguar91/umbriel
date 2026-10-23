@@ -58,7 +58,8 @@ namespace umbriel {
     // caller owns the returned node and must keep it through the commit.
     [[nodiscard]] wlr_scene_rect* createConfiguredFrameMask(const wlr_output_state& state) const;
     [[nodiscard]] wlr_scene_tree* layerTree(uint32_t layer) const;
-    [[nodiscard]] wlr_scene_tree* popupTree() const { return m_popupTree; }
+    // Popups stack above regular surfaces within the same shell layer.
+    [[nodiscard]] wlr_scene_tree* layerPopupTree(uint32_t layer) const;
     // Clipped roots for this output's window content. Every descendant is scissored to the output's layout box, which
     // is what keeps a scrolled or animating view from rendering on, or entering, a neighbouring output. Positioned at
     // the layout origin, so root-local coordinates are layout coordinates.
@@ -181,6 +182,7 @@ namespace umbriel {
     static void onRequestState(wl_listener* listener, void* data);
     static void onPresent(wl_listener* listener, void* data);
     static void onBackgroundUpdate(wl_listener* listener, void* data);
+    static void onBackgroundPopupUpdate(wl_listener* listener, void* data);
     static void onDestroy(wl_listener* listener, void* data);
     static int onFrameRetryTimer(void* data);
     static int onEffectFrameTimer(void* data);
@@ -222,7 +224,7 @@ namespace umbriel {
     std::optional<float> m_runtimeSdrWhite;
     wlr_scene_output* m_sceneOutput = nullptr;
     wlr_scene_tree* m_layerTrees[kLayerCount]{};
-    wlr_scene_tree* m_popupTree = nullptr;
+    wlr_scene_tree* m_layerPopupTrees[kLayerCount]{};
     wlr_scene_tree* m_viewRoot = nullptr;
     wlr_scene_tree* m_fullscreenRoot = nullptr;
     wlr_scene_tree* m_pinnedRoot = nullptr;
@@ -292,6 +294,7 @@ namespace umbriel {
     wl_listener m_requestState{};
     wl_listener m_present{};
     wl_listener m_backgroundUpdate{};
+    wl_listener m_backgroundPopupUpdate{};
     wl_listener m_destroy{};
   };
 

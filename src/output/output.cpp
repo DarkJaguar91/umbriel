@@ -36,6 +36,7 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -198,6 +199,7 @@ namespace umbriel {
 
     for (uint32_t layer = 0; layer < kLayerCount; ++layer) {
       m_layerTrees[layer] = wlr_scene_tree_create(m_server->shellLayerTree(layer));
+      m_layerPopupTrees[layer] = wlr_scene_tree_create(m_server->shellLayerTree(layer));
     }
     m_backgroundUpdate.notify = onBackgroundUpdate;
     if (!wlr_scene_node_add_update_listener(
@@ -206,7 +208,13 @@ namespace umbriel {
       kLog.error("output '{}': failed to watch background scene updates", m_output->name);
       std::abort();
     }
-    m_popupTree = wlr_scene_tree_create(m_server->shellLayerTree(ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY));
+    m_backgroundPopupUpdate.notify = onBackgroundPopupUpdate;
+    if (!wlr_scene_node_add_update_listener(
+            &layerPopupTree(ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND)->node, &m_backgroundPopupUpdate
+        )) {
+      kLog.error("output '{}': failed to watch background popup updates", m_output->name);
+      std::abort();
+    }
     m_viewRoot = wlr_scene_tree_create(m_server->xdgTree());
     m_fullscreenRoot = wlr_scene_tree_create(m_server->fullscreenTree());
     m_pinnedRoot = wlr_scene_tree_create(m_server->pinnedTree());
@@ -1245,6 +1253,10 @@ namespace umbriel {
   }
 
   Output::~Output() {
+    if (m_backgroundPopupUpdate.link.next != nullptr) {
+      wl_list_remove(&m_backgroundPopupUpdate.link);
+      m_backgroundPopupUpdate.link.next = nullptr;
+    }
     if (m_backgroundUpdate.link.next != nullptr) {
       wl_list_remove(&m_backgroundUpdate.link);
       m_backgroundUpdate.link.next = nullptr;
@@ -1287,9 +1299,11 @@ namespace umbriel {
         layerTree = nullptr;
       }
     }
-    if (m_popupTree != nullptr) {
-      wlr_scene_node_destroy(&m_popupTree->node);
-      m_popupTree = nullptr;
+    for (wlr_scene_tree*& popupTree : m_layerPopupTrees) {
+      if (popupTree != nullptr) {
+        wlr_scene_node_destroy(&popupTree->node);
+        popupTree = nullptr;
+      }
     }
     if (m_optimizedBlur != nullptr) {
       wlr_scene_node_destroy(&m_optimizedBlur->node);
@@ -1310,6 +1324,11 @@ namespace umbriel {
       return m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP];
     }
     return m_layerTrees[layer];
+  }
+
+  wlr_scene_tree* Output::layerPopupTree(uint32_t layer) const {
+    assert(layer < kLayerCount);
+    return m_layerPopupTrees[layer];
   }
 
   void Output::arrangeLayer(wlr_scene_tree* tree, const wlr_box* fullArea, wlr_box* usableArea, bool exclusive) {
@@ -1372,7 +1391,9 @@ namespace umbriel {
     for (auto& m_layerTree : m_layerTrees) {
       wlr_scene_node_set_position(&m_layerTree->node, m_sceneOutput->x, m_sceneOutput->y);
     }
-    wlr_scene_node_set_position(&m_popupTree->node, m_sceneOutput->x, m_sceneOutput->y);
+    for (auto* popupTree : m_layerPopupTrees) {
+      wlr_scene_node_set_position(&popupTree->node, m_sceneOutput->x, m_sceneOutput->y);
+    }
 
     // Content roots are clipped to this output's layout box, not repositioned: views are laid out in layout
     // coordinates. A disabled output never gets here (outputArea is empty above), and its workspaces have already been
@@ -1480,6 +1501,11 @@ namespace umbriel {
   void Output::onBackgroundUpdate(wl_listener* listener, void* /*data*/) {
     Output* self;
     self = wl_container_of(listener, self, m_backgroundUpdate);
+    self->markBlurBackgroundDirty();
+  }
+
+  void Output::onBackgroundPopupUpdate(wl_listener* listener, void* /*data*/) {
+    Output* self = wl_container_of(listener, self, m_backgroundPopupUpdate); // NOLINT(modernize-use-auto)
     self->markBlurBackgroundDirty();
   }
 

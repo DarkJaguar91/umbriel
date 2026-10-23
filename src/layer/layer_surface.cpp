@@ -16,6 +16,7 @@ extern "C" {
 #include "wlr.h"
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace umbriel {
 
@@ -89,6 +90,24 @@ namespace umbriel {
       m_layerSurface = nullptr;
       return;
     }
+    m_popupTree = wlr_scene_tree_create(out->layerPopupTree(layer));
+    if (m_popupTree == nullptr) {
+      kLog.error("failed to create layer popup tree");
+      wlr_layer_surface_v1_destroy(m_layerSurface);
+      m_scene = nullptr;
+      m_layerSurface = nullptr;
+      return;
+    }
+    m_popupTree->node.data = sceneNodeData(this);
+    syncPopupTree();
+    m_sceneUpdate.notify = onSceneUpdate;
+    if (!wlr_scene_node_add_update_listener(&m_scene->tree->node, &m_sceneUpdate)) {
+      kLog.error("failed to watch layer popup geometry");
+      std::abort();
+    }
+    m_sceneDestroy.notify = onSceneDestroy;
+    wl_signal_add(&m_scene->tree->node.events.destroy, &m_sceneDestroy);
+
     m_rule = resolveLayerRules(config(), ruleText(m_layerSurface->namespace_), layerOf(layer), m_server->uptimeMs());
     m_scene->tree->node.data = sceneNodeData(this);
     m_layerSurface->data = this;
@@ -112,6 +131,11 @@ namespace umbriel {
 
   LayerSurface::~LayerSurface() {
     m_server->unregisterAnimatable(this);
+    if (m_sceneDestroy.link.next != nullptr) {
+      wl_list_remove(&m_sceneUpdate.link);
+      wl_list_remove(&m_sceneDestroy.link);
+      wlr_scene_node_destroy(&m_popupTree->node);
+    }
     if (m_map.link.next != nullptr) {
       wl_list_remove(&m_map.link);
       wl_list_remove(&m_unmap.link);
@@ -125,6 +149,7 @@ namespace umbriel {
     const bool ticked = m_fade.tick(nowMsec);
     if (m_scene != nullptr) {
       bindAnimationEffect(&m_scene->tree->node, AnimationEvent::Layers, m_fade);
+      bindAnimationEffect(&m_popupTree->node, AnimationEvent::Layers, m_fade);
     }
     if (!ticked) {
       return false;
@@ -148,16 +173,18 @@ namespace umbriel {
     float alpha = m_fade.animating() && effectRegistry().animationEffect(AnimationEvent::Layers) != nullptr
         ? 1.0F
         : std::clamp(static_cast<float>(m_fade.current()), 0.0F, 1.0F);
-    wlr_scene_node_for_each_buffer(
-        &m_scene->tree->node,
-        [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
-          wlr_scene_buffer_set_opacity(buffer, *static_cast<float*>(data));
-        },
-        &alpha
-    );
+    for (auto* tree : {m_scene->tree, m_popupTree}) {
+      wlr_scene_node_for_each_buffer(
+          &tree->node,
+          [](wlr_scene_buffer* buffer, int /*sx*/, int /*sy*/, void* data) {
+            wlr_scene_buffer_set_opacity(buffer, *static_cast<float*>(data));
+          },
+          &alpha
+      );
+    }
   }
 
-  void LayerSurface::beginCloseAnimation() {
+  void LayerSurface::beginCloseAnimation(wlr_scene_tree* tree) {
     Output* out = output();
     const auto& animation = config().animation;
     const auto& layers = animation.layers;
@@ -165,11 +192,13 @@ namespace umbriel {
       return;
     }
 
-    wlr_scene_tree* snap = wlr_scene_tree_create(out->layerTree(m_layerSurface->current.layer));
+    const uint32_t layer = m_layerSurface->current.layer;
+    wlr_scene_tree* parentTree = tree == m_popupTree ? out->layerPopupTree(layer) : out->layerTree(layer);
+    wlr_scene_tree* snap = wlr_scene_tree_create(parentTree);
     if (snap == nullptr) {
       return;
     }
-    wlr_scene_node_set_position(&snap->node, m_scene->tree->node.x, m_scene->tree->node.y);
+    wlr_scene_node_set_position(&snap->node, tree->node.x, tree->node.y);
 
     struct CopyCtx {
       wlr_scene_tree* snap;
@@ -177,9 +206,9 @@ namespace umbriel {
       int rootY;
       int buffersCopied;
     };
-    CopyCtx ctx{snap, m_scene->tree->node.x, m_scene->tree->node.y, 0};
+    CopyCtx ctx{snap, tree->node.x, tree->node.y, 0};
     wlr_scene_node_for_each_buffer(
-        &m_scene->tree->node,
+        &tree->node,
         [](wlr_scene_buffer* src, int sx, int sy, void* data) {
           auto* c = static_cast<CopyCtx*>(data);
           if (src->buffer == nullptr || !src->node.enabled) {
@@ -211,7 +240,7 @@ namespace umbriel {
       return;
     }
 
-    wlr_scene_node_copy_animations_for_snapshot(&snap->node, &m_scene->tree->node);
+    wlr_scene_node_copy_animations_for_snapshot(&snap->node, &tree->node);
     (void)m_server->animateCloseSnapshot(
         out, snap, snap, {}, {},
         Server::CloseSnapshotOverrides{
@@ -265,7 +294,30 @@ namespace umbriel {
     if (out == nullptr || m_scene == nullptr) {
       return;
     }
+    wlr_scene_node_reparent(&m_popupTree->node, out->layerPopupTree(layer));
     wlr_scene_node_reparent(&m_scene->tree->node, out->layerTree(layer));
+  }
+
+  void LayerSurface::syncPopupTree() {
+    wlr_scene_node_set_position(&m_popupTree->node, m_scene->tree->node.x, m_scene->tree->node.y);
+    wlr_scene_node_set_enabled(&m_popupTree->node, m_mapped && m_scene->tree->node.enabled);
+  }
+
+  void LayerSurface::onSceneUpdate(wl_listener* listener, void* data) {
+    LayerSurface* self = wl_container_of(listener, self, m_sceneUpdate); // NOLINT(modernize-use-auto)
+    if (data == &self->m_scene->tree->node) {
+      self->syncPopupTree();
+    }
+  }
+
+  void LayerSurface::onSceneDestroy(wl_listener* listener, void* /*data*/) {
+    LayerSurface* self = wl_container_of(listener, self, m_sceneDestroy); // NOLINT(modernize-use-auto)
+    wl_list_remove(&self->m_sceneUpdate.link);
+    wl_list_remove(&self->m_sceneDestroy.link);
+    self->m_sceneUpdate.link.next = nullptr;
+    self->m_sceneDestroy.link.next = nullptr;
+    wlr_scene_node_destroy(&self->m_popupTree->node);
+    self->m_popupTree = nullptr;
   }
 
   void LayerSurface::focus() {
@@ -394,6 +446,7 @@ namespace umbriel {
 
   void LayerSurface::handleMap() {
     m_mapped = true;
+    syncPopupTree();
     m_server->scheduleIpcLayersEvent();
     m_server->updateIdleInhibit();
     if (Output* out = output()) {
@@ -428,10 +481,13 @@ namespace umbriel {
 
   void LayerSurface::handleUnmap() {
     // Snapshot before any other unmap bookkeeping runs: the live buffer is still valid here.
-    beginCloseAnimation();
+    beginCloseAnimation(m_scene->tree);
+    beginCloseAnimation(m_popupTree);
     wlr_scene_node_clear_animations(&m_scene->tree->node);
+    wlr_scene_node_clear_animations(&m_popupTree->node);
     const bool hadFocus = hasKeyboardFocus();
     m_mapped = false;
+    syncPopupTree();
     m_server->scheduleIpcLayersEvent();
     m_server->updateIdleInhibit();
     m_blur.hide();
@@ -525,8 +581,9 @@ namespace umbriel {
 
   void LayerSurface::handleNewPopup(void* data) {
     auto* popup = static_cast<wlr_xdg_popup*>(data);
-    // Keep popup scene under the layer surface so geometry stays surface-local.
-    new Popup(popup, m_scene->tree);
+    // The popup tree shares the surface origin and stacks above its shell layer's regular surfaces.
+    wlr_scene_node_raise_to_top(&m_popupTree->node);
+    new Popup(popup, m_popupTree);
   }
 
 } // namespace umbriel

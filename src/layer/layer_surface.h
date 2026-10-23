@@ -62,6 +62,8 @@ namespace umbriel {
     static void onCommit(wl_listener* listener, void* data);
     static void onDestroy(wl_listener* listener, void* data);
     static void onNewPopup(wl_listener* listener, void* data);
+    static void onSceneUpdate(wl_listener* listener, void* data);
+    static void onSceneDestroy(wl_listener* listener, void* data);
 
     void handleMap();
     void handleUnmap();
@@ -69,17 +71,19 @@ namespace umbriel {
     void handleDestroy();
     void handleNewPopup(void* data);
     void reparentToLayer(uint32_t layer);
+    void syncPopupTree();
     // Tell an open overview to re-resolve this output's mirrored background stack.
     void notifyDesktopStack();
     void updateBlur();
     void applyConfig();
     void refreshStartupRuleEffects();
     void applyFadeAlpha();
-    void beginCloseAnimation();
+    void beginCloseAnimation(wlr_scene_tree* tree);
 
     Server* m_server = nullptr;
     wlr_layer_surface_v1* m_layerSurface = nullptr;
     wlr_scene_layer_surface_v1* m_scene = nullptr;
+    wlr_scene_tree* m_popupTree = nullptr;
     SurfaceBlur m_blur;
     ResolvedLayerRule m_rule;
     AnimatedValue m_fade{1.0};
@@ -91,6 +95,8 @@ namespace umbriel {
     wl_listener m_commit{};
     wl_listener m_destroy{};
     wl_listener m_newPopup{};
+    wl_listener m_sceneUpdate{};
+    wl_listener m_sceneDestroy{};
   };
 
 } // namespace umbriel
