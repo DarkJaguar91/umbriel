@@ -14,6 +14,8 @@ namespace umbriel {
     int contentHeight = 0;
     // Border thickness drawn around the content, 0 when undecorated.
     int borderInset = 0;
+    // Resolved window corner radius, including a per-window override.
+    int cornerRadius = 0;
     int titleBarHeight = 0;
     // Scale of the output presenting the view, for chrome that renders text.
     float scale = 1.0F;

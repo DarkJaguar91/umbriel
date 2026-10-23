@@ -687,6 +687,7 @@ namespace umbriel {
         int height = 28;
         std::string font = "sans 10";
         TitleBarButtonSide buttonPosition = TitleBarButtonSide::Right;
+        int buttonCornerRadius = -1;
         bool operator==(const TitleBar&) const = default;
       } titleBar;
       int borderWidth = 2;

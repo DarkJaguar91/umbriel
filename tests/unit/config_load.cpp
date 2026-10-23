@@ -4470,6 +4470,7 @@ mode = "forced"
 height = 42
 font = "sans 12"
 button_position = "left"
+button_corner_radius = 4
 [colors.title_bar]
 background = "#FF0000FF"
 background_unfocused = "#00FF00FF"
@@ -4487,6 +4488,7 @@ maximize = "#00FFFFFF"
   CHECK_EQ(bar.height, 42);
   CHECK_EQ(bar.font, std::string("sans 12"));
   CHECK_EQ(bar.buttonPosition, umbriel::TitleBarButtonSide::Left);
+  CHECK_EQ(bar.buttonCornerRadius, 4);
   const auto& colors = store.config().colors.titleBar;
   CHECK_EQ(colors.background[0], 1.0F);
   CHECK_EQ(colors.backgroundUnfocused[1], 1.0F);
@@ -4504,6 +4506,7 @@ mode = "always"
 height = 500
 font = 123
 button_position = "middle"
+button_corner_radius = 500
 )");
   auto& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
@@ -4511,11 +4514,40 @@ button_position = "middle"
   CHECK_EQ(store.config().appearance.titleBar.mode, umbriel::TitleBarMode::Off);
   CHECK_EQ(store.config().appearance.titleBar.height, 128);
   CHECK_EQ(store.config().appearance.titleBar.buttonPosition, umbriel::TitleBarButtonSide::Right);
+  CHECK_EQ(store.config().appearance.titleBar.buttonCornerRadius, 100);
   CHECK(containsDiagnostic(store, "appearance.title_bar.height = 500 out of range, clamped to 128"));
   CHECK(containsDiagnostic(store, "appearance.title_bar.button_position"));
+  CHECK(containsDiagnostic(store, "appearance.title_bar.button_corner_radius"));
   CHECK(containsDiagnostic(store, "appearance.title_bar.mode"));
   CHECK(containsDiagnostic(store, "expected string"));
   CHECK(!containsDiagnostic(store, "unknown key"));
+}
+
+UMBRIEL_TEST(titleBarButtonRadiusHasValidatedBounds) {
+  const TempConfig file;
+  auto& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  file.write("[appearance.title_bar]\n");
+  CHECK(store.reload().success);
+  CHECK_EQ(store.config().appearance.titleBar.buttonCornerRadius, -1);
+  for (const auto& [value, expected] :
+       std::array<std::pair<std::string_view, int>, 4>{{{"-1", -1}, {"0", 0}, {"4", 4}, {"-2", -1}}}) {
+    file.write(std::format("[appearance.title_bar]\nbutton_corner_radius = {}\n", value));
+    CHECK(store.reload().success);
+    CHECK_EQ(store.config().appearance.titleBar.buttonCornerRadius, expected);
+    CHECK(!containsDiagnostic(store, "unknown key"));
+    if (value == "-2")
+      CHECK(containsDiagnostic(store, "appearance.title_bar.button_corner_radius"));
+    else
+      CHECK(store.diagnostics().empty());
+  }
+  for (const std::string_view value : {"\"round\"", "0.5"}) {
+    file.write(std::format("[appearance.title_bar]\nbutton_corner_radius = {}\n", value));
+    CHECK(store.reload().success);
+    CHECK_EQ(store.config().appearance.titleBar.buttonCornerRadius, -1);
+    CHECK(containsDiagnostic(store, "appearance.title_bar.button_corner_radius"));
+    CHECK(!containsDiagnostic(store, "unknown key"));
+  }
 }
 
 UMBRIEL_TEST(titleBarModesUseStrictVocabulary) {

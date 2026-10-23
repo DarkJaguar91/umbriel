@@ -180,16 +180,15 @@ namespace umbriel {
       rect->accepts_input = !m_preview;
     };
     place(m_background, {0, -h, g.contentWidth, h});
-    const int radius = g.borderInset > 0 || config().appearance.cornerRadius > 0
-        ? nestedRadius(config().appearance.cornerRadius, g.borderInset)
-        : 0;
+    const int radius = nestedRadius(g.cornerRadius, g.borderInset);
     wlr_scene_rect_set_corner_radii(m_background, corner_radii_new(zoomed(radius), zoomed(radius), 0, 0));
     const auto& style = config().appearance.titleBar;
     const TitleBarLayout parts = titleBarLayout(g.contentWidth, h, style.buttonPosition);
     const auto drawButton = [&](wlr_scene_rect* button, wlr_box box) {
       box.y -= h;
       place(button, box);
-      wlr_scene_rect_set_corner_radius(button, zoomed(box.width) / 2);
+      const int buttonRadius = style.buttonCornerRadius >= 0 ? style.buttonCornerRadius : g.cornerRadius;
+      wlr_scene_rect_set_corner_radius(button, std::min(zoomed(box.width) / 2, zoomed(buttonRadius)));
       wlr_scene_node_set_enabled(&button->node, box.x >= 0 && box.x + box.width <= g.contentWidth);
     };
     drawButton(m_close, parts.close);

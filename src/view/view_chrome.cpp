@@ -351,6 +351,7 @@ namespace umbriel {
         .contentWidth = contentWidth,
         .contentHeight = contentHeight,
         .borderInset = borderInset(),
+        .cornerRadius = decorationCornerRadius(),
         .titleBarHeight = titleBarHeight(),
         .scale = output != nullptr ? output->wlr()->scale : 1.0F,
         .suppressed = !m_mapped || m_maximizedToEdges || scheduledFullscreen() || currentFullscreen(),

@@ -83,6 +83,7 @@ namespace umbriel {
               {{"forced", TitleBarMode::Forced}, {"off", TitleBarMode::Off}, {"on", TitleBarMode::On}}
           ),
           integer("height", 16, 128, &A::TitleBar::height),
+          integer("button_corner_radius", -1, 100, &A::TitleBar::buttonCornerRadius),
           registry::text("font", &A::TitleBar::font),
           registry::choice(
               "button_position", &A::TitleBar::buttonPosition,

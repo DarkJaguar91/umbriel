@@ -466,6 +466,7 @@ namespace umbriel {
         .contentWidth = world.width,
         .contentHeight = world.height,
         .borderInset = borderInset,
+        .cornerRadius = card.view->decorationCornerRadius(),
         .titleBarHeight = card.view->titleBarHeight(),
         .scale = output != nullptr ? output->wlr()->scale : 1.0F,
         .suppressed = card.view->currentFullscreen() || card.view->maximizedToEdges(),
