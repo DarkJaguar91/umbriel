@@ -100,6 +100,7 @@ namespace umbriel {
       std::optional<double> defaultExtentFraction;
       std::optional<bool> centerUnderfullStrip;
       std::optional<CenterFocusedColumn> centerFocused;
+      std::optional<bool> centerOnOverviewSelect;
       bool operator==(const Scrolling&) const = default;
     } scrolling;
     struct Dwindle {
@@ -156,6 +157,7 @@ namespace umbriel {
       std::optional<double> defaultExtentFraction;
       bool centerUnderfullStrip = true;
       CenterFocusedColumn centerFocused = CenterFocusedColumn::Never;
+      bool centerOnOverviewSelect = false;
       // Axis-agnostic layout state is preserved when config reload changes direction.
       ScrollingDirection direction = ScrollingDirection::Horizontal;
       bool operator==(const Scrolling&) const = default;
@@ -959,6 +961,8 @@ namespace umbriel {
         std::optional<double> defaultExtentFraction;
         bool centerUnderfullStrip = true;
         CenterFocusedColumn centerFocused = CenterFocusedColumn::Never;
+        // Center the column picked in the overview on close, like column-center, whatever centerFocused says.
+        bool centerOnOverviewSelect = false;
         bool operator==(const Scrolling&) const = default;
       } scrolling;
       struct Dwindle {

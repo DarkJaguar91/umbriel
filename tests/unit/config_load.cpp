@@ -1225,6 +1225,30 @@ UMBRIEL_TEST(overviewWorkspaceWallpaperLoads) {
   CHECK(!store.config().overview.workspaceWallpaper);
 }
 
+// Off by default so selecting from the overview keeps honoring layout.scrolling.center_focused.
+UMBRIEL_TEST(centerOnOverviewSelectLoads) {
+  const TempConfig file;
+  ConfigStore& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+
+  file.write("[layout.scrolling]\ncenter_focused = \"never\"\n");
+  CHECK(store.reload().success);
+  CHECK(!store.config().layout.scrolling.centerOnOverviewSelect);
+
+  file.write(R"([layout.scrolling]
+center_on_overview_select = true
+
+[[workspace]]
+name = "dev"
+
+[workspace.layout.scrolling]
+center_on_overview_select = false
+)");
+  CHECK(store.reload().success);
+  CHECK(store.config().layout.scrolling.centerOnOverviewSelect);
+  CHECK(store.config().workspaceRules[0].layout.scrolling.centerOnOverviewSelect == false);
+}
+
 UMBRIEL_TEST(overviewShortcutConfigurationLoads) {
   const TempConfig file;
   ConfigStore& store = umbriel::configStore();
