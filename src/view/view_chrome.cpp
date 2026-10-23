@@ -106,6 +106,7 @@ namespace umbriel {
     m_ssdFrame->setTitle(title() != nullptr ? title() : "");
     m_ssdFrame->setResizable(!m_tiled);
     m_ssdFrame->setMaximizeEnabled(!fixed);
+    syncTitleBarButtons();
     m_ssdFrame->setMaximized(scheduledMaximized() || floatingMaximized());
     m_ssdFrame->setFocused(m_borderFocusedState);
     m_ssdFrame->setAlphas(chromeAlpha(), m_fadeAlpha * m_overviewOpacity);
@@ -115,6 +116,22 @@ namespace umbriel {
         m_presentedBox.width > 0 && m_presentedBox.height > 0 ? m_presentedBox : committedContentBox();
     layoutChromeAttachment(content.width, content.height);
     wlr_scene_node_raise_to_top(&m_attachmentTree->node);
+  }
+
+  void View::syncTitleBarButtons() {
+    if (m_ssdFrame == nullptr)
+      return;
+    const std::vector<TitleBarButton>& configured =
+        m_titleBarButtons ? *m_titleBarButtons : config().appearance.titleBar.buttons;
+    const bool canMinimize = minimizable();
+    std::array<TitleBarButton, kTitleBarButtonCount> shown{};
+    size_t count = 0;
+    for (const TitleBarButton button : configured) {
+      if ((button != TitleBarButton::Minimize || canMinimize) && count < shown.size()) {
+        shown[count++] = button;
+      }
+    }
+    m_ssdFrame->setButtons(std::span(shown.data(), count));
   }
 
   bool View::decorated() const { return m_decoration.bordersVisible(); }

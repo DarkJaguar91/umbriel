@@ -214,7 +214,10 @@ UMBRIEL_TEST(listedValuesAreAccepted) {
   for (const KeyDescription& key : umbriel::registry::describeConfig(umbriel::Config{})) {
     for (const std::string_view value : key.values) {
       std::string concrete;
-      toml::table document = documentSetting(key.path, nlohmann::ordered_json(value), concrete);
+      // A string array lists the values its entries may take.
+      const nlohmann::ordered_json setting =
+          key.type == "string_array" ? nlohmann::ordered_json::array({value}) : nlohmann::ordered_json(value);
+      toml::table document = documentSetting(key.path, setting, concrete);
       if (key.path == "animation.workspaces.style" && value == "reveal") {
         document.at_path("animation.workspaces").as_table()->insert("effect", "wipe");
         document.insert(

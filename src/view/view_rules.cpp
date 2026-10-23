@@ -642,6 +642,10 @@ namespace umbriel {
       m_titleBarMode = titleBarMode;
       refreshTitleBar();
     }
+    if (m_titleBarButtons != rule.titleBarButtons) {
+      m_titleBarButtons = rule.titleBarButtons;
+      syncTitleBarButtons();
+    }
     // Tile spacing stays on the global border width, so a decoration change redraws this window without an arrange.
     const bool ringChanged = m_decoration.applyRule(rule);
     const auto resolve = [&](EffectKind kind, const std::string& fallback, const std::optional<std::string>& selected) {

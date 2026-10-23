@@ -217,6 +217,14 @@ namespace umbriel {
                {"forced", TitleBarMode::Forced},
                {"off", TitleBarMode::Off}}
           ),
+          registry::custom<W>(
+              "title_bar_buttons", registry::KeyDescription("string_array").withValues(titleBarButtonNames()),
+              [](const toml::node& node, const std::string& path, W& target, registry::ReadContext&) {
+                if (auto buttons = parseTitleBarButtons(node, path)) {
+                  target.titleBarButtons = std::move(*buttons);
+                }
+              }
+          ),
           integer("border_width", 0, 100, &W::borderWidth),
           integer("outer_border_width", 0, 100, &W::outerBorderWidth),
           integer("corner_radius", 0, 100, &W::cornerRadius),

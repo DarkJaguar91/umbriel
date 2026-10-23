@@ -345,6 +345,7 @@ namespace umbriel {
     if (m_minimized && !eligible) {
       setMinimized(false);
     }
+    syncTitleBarButtons();
     if (m_toplevel == nullptr
         || !m_toplevel->base->initialized
         || wl_resource_get_version(m_toplevel->resource) < kXdgWmCapabilitiesSinceVersion) {

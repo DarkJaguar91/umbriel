@@ -376,6 +376,9 @@ namespace umbriel {
       if (rule.titleBar) {
         resolved.titleBar = rule.titleBar;
       }
+      if (rule.titleBarButtons) {
+        resolved.titleBarButtons = rule.titleBarButtons;
+      }
       if (rule.borderColorFocused) {
         resolved.borderColorFocused = rule.borderColorFocused;
       }

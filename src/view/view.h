@@ -606,8 +606,8 @@ namespace umbriel {
     void handleForeignActivate();
     void handleForeignClose();
     void handleForeignMinimize(void* data);
-    // Drop the minimized state of a window that can no longer be minimized, and offer the client minimize only while
-    // it can be.
+    // Drop the minimized state of a window that can no longer be minimized, and offer the client and the title bar
+    // minimize only while it can be.
     void syncMinimizeEligibility();
     void handleForeignDestroy();
     void handleExtForeignDestroy();
@@ -928,6 +928,10 @@ namespace umbriel {
     std::optional<TitleBarMode> m_titleBarMode;
     [[nodiscard]] bool wantsTitleBar(TitleBarMode mode) const;
     void refreshTitleBar();
+    // A window rule's title_bar_buttons, which replaces [appearance.title_bar] buttons.
+    std::optional<std::vector<TitleBarButton>> m_titleBarButtons;
+    // Hand the frame the configured buttons this window can use now: minimize only while it can minimize.
+    void syncTitleBarButtons();
     int m_chromeContentWidth = 0;
     int m_chromeContentHeight = 0;
     bool m_tabHidden = false;

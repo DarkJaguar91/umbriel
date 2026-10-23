@@ -22,6 +22,7 @@ namespace umbriel {
     m_background = wlr_scene_rect_create(m_tree, 1, 1, clear);
     m_close = wlr_scene_rect_create(m_tree, 1, 1, clear);
     m_maximize = wlr_scene_rect_create(m_tree, 1, 1, clear);
+    m_minimize = wlr_scene_rect_create(m_tree, 1, 1, clear);
     for (auto*& grip : m_grips)
       grip = wlr_scene_rect_create(m_gripTree, 1, 1, clear);
     wlr_scene_node_set_enabled(&m_tree->node, false);
@@ -75,6 +76,12 @@ namespace umbriel {
       return;
     m_maximizeEnabled = enabled;
     updateColors();
+  }
+  void SsdFrame::setButtons(std::span<const TitleBarButton> buttons) {
+    if (std::ranges::equal(m_buttons, buttons))
+      return;
+    m_buttons.assign(buttons.begin(), buttons.end());
+    redraw();
   }
   void SsdFrame::setMaximized(bool maximized) { m_maximized = maximized; }
   void SsdFrame::setHovered(SsdFramePart part) {
@@ -159,6 +166,7 @@ namespace umbriel {
     };
     button(m_close, colors.close, SsdFramePart::Close, true);
     button(m_maximize, colors.maximize, SsdFramePart::Maximize, m_maximizeEnabled);
+    button(m_minimize, colors.minimize, SsdFramePart::Minimize, true);
     if (m_label != nullptr)
       wlr_scene_buffer_set_opacity(m_label, m_alpha);
     updateBlur();
@@ -188,16 +196,22 @@ namespace umbriel {
     const int radius = nestedRadius(g.cornerRadius, g.borderInset);
     wlr_scene_rect_set_corner_radii(m_background, corner_radii_new(zoomed(radius), zoomed(radius), 0, 0));
     const auto& style = config().appearance.titleBar;
-    const TitleBarLayout parts = titleBarLayout(g.contentWidth, h, style.buttonPosition);
-    const auto drawButton = [&](wlr_scene_rect* button, wlr_box box) {
+    const TitleBarLayout parts = titleBarLayout(g.contentWidth, h, style.buttonPosition, m_buttons);
+    const auto drawButton = [&](wlr_scene_rect* button, const std::optional<wlr_box>& slot) {
+      if (!slot) {
+        wlr_scene_node_set_enabled(&button->node, false);
+        return;
+      }
+      wlr_box box = *slot;
       box.y -= h;
       place(button, box);
       const int buttonRadius = style.buttonCornerRadius >= 0 ? style.buttonCornerRadius : g.cornerRadius;
       wlr_scene_rect_set_corner_radius(button, std::min(zoomed(box.width) / 2, zoomed(buttonRadius)));
       wlr_scene_node_set_enabled(&button->node, box.x >= 0 && box.x + box.width <= g.contentWidth);
     };
-    drawButton(m_close, parts.close);
-    drawButton(m_maximize, parts.maximize);
+    drawButton(m_close, parts.button(TitleBarButton::Close));
+    drawButton(m_maximize, parts.button(TitleBarButton::Maximize));
+    drawButton(m_minimize, parts.button(TitleBarButton::Minimize));
     const int band = g.borderInset + kSsdResizeBand;
     const std::array<wlr_box, 4> grips{{
         {-band, -h - band, g.contentWidth + 2 * band, band},
@@ -249,7 +263,7 @@ namespace umbriel {
       return {};
     return ssdFramePointAt(
         m_geometry.contentWidth, m_geometry.contentHeight, m_geometry.titleBarHeight, m_geometry.borderInset,
-        m_resizable, config().appearance.titleBar.buttonPosition, x, y
+        m_resizable, config().appearance.titleBar.buttonPosition, m_buttons, x, y
     );
   }
 
@@ -267,7 +281,7 @@ namespace umbriel {
         wlr_scene_node_set_position(&copy->node, m_blur->node.x, m_blur->node.y);
       }
     }
-    for (const auto* source : {m_background, m_close, m_maximize}) {
+    for (const auto* source : {m_background, m_close, m_maximize, m_minimize}) {
       if (!source->node.enabled)
         continue;
       auto* copy = wlr_scene_rect_create(tree, source->width, source->height, source->color);
@@ -294,6 +308,7 @@ namespace umbriel {
       frame->setTitle(m_title);
       frame->setResizable(false);
       frame->setMaximizeEnabled(m_maximizeEnabled);
+      frame->setButtons(m_buttons);
       frame->setMaximized(m_maximized);
       frame->setFocused(m_focused);
       frame->setBlurOptions(m_blurOptions);

@@ -1543,6 +1543,8 @@ namespace umbriel {
           const bool maximized =
               press.view->maximizedToEdges() || press.view->scheduledMaximized() || press.view->floatingMaximized();
           press.view->setMaximizedLikeClientRequest(!maximized);
+        } else if (press.part == SsdFramePart::Minimize) {
+          press.view->requestMinimize();
         }
       }
     }
@@ -1723,6 +1725,7 @@ namespace umbriel {
             button == BTN_LEFT
             && !target->blocked()
             && (hit->part == SsdFramePart::Close
+                || hit->part == SsdFramePart::Minimize
                 || (hit->part == SsdFramePart::Maximize && target->ssdFrame()->maximizeEnabled()))
         ) {
           m_server->focusView(target, FocusReason::PointerPress);
@@ -3431,6 +3434,7 @@ namespace umbriel {
         } else if (
             !hit->view->blocked()
             && (hit->part == SsdFramePart::Close
+                || hit->part == SsdFramePart::Minimize
                 || (hit->part == SsdFramePart::Maximize && hit->view->ssdFrame()->maximizeEnabled()))
         ) {
           name = "pointer";

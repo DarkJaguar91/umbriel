@@ -445,10 +445,11 @@ single applications. Either takes effect on reload.
 
 ### Minimize
 
-Only floating windows minimize: `window-minimize`, the application's own
-minimize button, or a taskbar can hide one. Tiled, pinned, fullscreen, and
-scratchpad windows do not minimize, and applications are offered minimize only
-while their window floats. Tiling a minimized window, for example by switching
+Only floating windows minimize: `window-minimize`, the minimize button of
+Umbriel's [title bar](appearance.md#title-bar) or of the application, or a
+taskbar can hide one. Tiled, pinned, fullscreen, and scratchpad windows do not
+minimize, and applications and the title bar offer minimize only while the
+window floats. Tiling a minimized window, for example by switching
 its workspace to a tiling layout, shows it again.
 
 A minimized window keeps its workspace, position, size, and stacking. It stays

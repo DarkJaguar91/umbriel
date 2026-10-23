@@ -462,6 +462,8 @@ namespace umbriel {
     std::optional<double> blurIgnoreAlpha;
     std::optional<bool> blurOptimized;
     std::optional<TitleBarMode> titleBar;
+    // Overrides [appearance.title_bar] buttons, read from the title outward.
+    std::optional<std::vector<TitleBarButton>> titleBarButtons;
     // Overrides [colors.border] for windows this rule matches.
     std::optional<std::array<float, 4>> borderColorFocused;
     std::optional<std::array<float, 4>> borderColorUnfocused;
@@ -524,6 +526,7 @@ namespace umbriel {
           && blurIgnoreAlpha == other.blurIgnoreAlpha
           && blurOptimized == other.blurOptimized
           && titleBar == other.titleBar
+          && titleBarButtons == other.titleBarButtons
           && borderColorFocused == other.borderColorFocused
           && borderColorUnfocused == other.borderColorUnfocused
           && borderColorOuter == other.borderColorOuter
@@ -570,6 +573,7 @@ namespace umbriel {
     std::optional<double> blurIgnoreAlpha;
     std::optional<bool> blurOptimized;
     std::optional<TitleBarMode> titleBar;
+    std::optional<std::vector<TitleBarButton>> titleBarButtons;
     std::optional<std::array<float, 4>> borderColorFocused;
     std::optional<std::array<float, 4>> borderColorUnfocused;
     std::optional<std::array<float, 4>> borderColorOuter;
@@ -647,6 +651,7 @@ namespace umbriel {
         std::array<float, 4> textUnfocused{0.5411765F, 0.5411765F, 0.5725490F, 1.0F};
         std::array<float, 4> close{1.0F, 0.4196078F, 0.4196078F, 1.0F};
         std::array<float, 4> maximize{0.4784314F, 0.6392157F, 1.0F, 1.0F};
+        std::array<float, 4> minimize{1.0F, 0.8196078F, 0.4F, 1.0F};
         bool operator==(const TitleBar&) const = default;
       } titleBar;
       std::array<float, 4> background{0.0784314F, 0.0784314F, 0.0980392F, 1.0F};
@@ -705,6 +710,8 @@ namespace umbriel {
         std::string font = "sans 10";
         TitleBarButtonSide buttonPosition = TitleBarButtonSide::Right;
         int buttonCornerRadius = -1;
+        // Read from the title outward: the last one sits at the bar's edge.
+        std::vector<TitleBarButton> buttons{TitleBarButton::Minimize, TitleBarButton::Maximize, TitleBarButton::Close};
         bool operator==(const TitleBar&) const = default;
       } titleBar;
       int borderWidth = 2;

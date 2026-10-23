@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <utility>
 #include <variant>
+#include <vector>
 
 using umbriel::ConfigDiagnostic;
 using umbriel::ConfigStore;
@@ -4699,6 +4700,68 @@ title_bar = "force"
   CHECK(containsDiagnostic(store, "window_rule[2].title_bar"));
   CHECK(containsDiagnostic(store, "window_rule[3].title_bar"));
   CHECK(!containsDiagnostic(store, "unknown key"));
+}
+
+UMBRIEL_TEST(titleBarButtonsKeepOrderAndSkipBadEntries) {
+  using umbriel::TitleBarButton;
+  using Buttons = std::vector<TitleBarButton>;
+  const Buttons defaults{TitleBarButton::Minimize, TitleBarButton::Maximize, TitleBarButton::Close};
+  const Buttons reordered{TitleBarButton::Close, TitleBarButton::Minimize};
+  const Buttons cleaned{TitleBarButton::Maximize, TitleBarButton::Close};
+  const TempConfig file;
+  auto& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  file.write("");
+  CHECK(store.reload().success);
+  CHECK(store.config().appearance.titleBar.buttons == defaults);
+  file.write("[appearance.title_bar]\nbuttons = [\"close\", \"minimize\"]\n");
+  CHECK(store.reload().success);
+  CHECK(store.diagnostics().empty());
+  CHECK(store.config().appearance.titleBar.buttons == reordered);
+  file.write("[appearance.title_bar]\nbuttons = []\n");
+  CHECK(store.reload().success);
+  CHECK(store.diagnostics().empty());
+  CHECK(store.config().appearance.titleBar.buttons.empty());
+  file.write("[appearance.title_bar]\nbuttons = [\"maximize\", \"shade\", \"maximize\", 3, \"close\"]\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().appearance.titleBar.buttons == cleaned);
+  CHECK(containsDiagnostic(store, "ignoring repeated appearance.title_bar.buttons entry \"maximize\""));
+  CHECK(containsDiagnostic(store, "ignoring appearance.title_bar.buttons entry"));
+  file.write("[appearance.title_bar]\nbuttons = \"close\"\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().appearance.titleBar.buttons == defaults);
+  CHECK(containsDiagnostic(store, "appearance.title_bar.buttons"));
+  CHECK(!containsDiagnostic(store, "unknown key"));
+}
+
+UMBRIEL_TEST(titleBarButtonsRuleOverridesOnlyWhenSet) {
+  using umbriel::TitleBarButton;
+  using Buttons = std::vector<TitleBarButton>;
+  const Buttons none;
+  const Buttons closeOnly{TitleBarButton::Close};
+  const TempConfig file;
+  file.write(R"(
+[[window_rule]]
+match.app_id = "^bare$"
+title_bar_buttons = []
+[[window_rule]]
+match.app_id = "^bare$"
+title_bar = "forced"
+[[window_rule]]
+match.app_id = "^dialog$"
+title_bar_buttons = ["close"]
+)");
+  auto& store = umbriel::configStore();
+  store.setRootPath(file.path(), true);
+  CHECK(store.reload().success);
+  CHECK(store.diagnostics().empty());
+  const auto resolve = [&](const char* appId) {
+    return umbriel::resolveWindowRules(store.config(), appId, "title", std::nullopt, umbriel::ContentType::None, {}, 0);
+  };
+  // A later rule without the key leaves the earlier override in place.
+  CHECK(resolve("bare").titleBarButtons == none);
+  CHECK(resolve("dialog").titleBarButtons == closeOnly);
+  CHECK(!resolve("other").titleBarButtons.has_value());
 }
 
 UMBRIEL_TEST(floatingLayoutLoadsGloballyAndPerWorkspace) {

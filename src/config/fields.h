@@ -66,6 +66,12 @@ namespace umbriel {
   [[nodiscard]] const registry::Choices<ContentType>& contentTypes();
   // Shared by [layout.tabs] and window rules.
   [[nodiscard]] const registry::Choices<ColumnDisplay>& columnDisplays();
+  // Shared by [appearance.title_bar] buttons and the title_bar_buttons window rule: an array of distinct buttons, read
+  // from the title outward. Unknown or repeated entries are reported and skipped; nullopt when the value is no array.
+  [[nodiscard]] std::optional<std::vector<TitleBarButton>>
+  parseTitleBarButtons(const toml::node& node, const std::string& path);
+  [[nodiscard]] std::vector<std::string_view> titleBarButtonNames();
+  [[nodiscard]] nlohmann::ordered_json titleBarButtonsJson(const std::vector<TitleBarButton>& buttons);
 
   // Why an action or rule may not name a scratchpad, or nullopt when it may. Scratchpads are read before every table
   // that names one.

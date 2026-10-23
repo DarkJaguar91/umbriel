@@ -8,6 +8,7 @@
 #include <array>
 #include <format>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -32,6 +33,7 @@ namespace umbriel {
           color("text_unfocused", &C::TitleBar::textUnfocused),
           color("close", &C::TitleBar::close),
           color("maximize", &C::TitleBar::maximize),
+          color("minimize", &C::TitleBar::minimize),
       };
       static const registry::Fields<C::Border> border{
           color("focused", &C::Border::focused),
@@ -94,6 +96,15 @@ namespace umbriel {
                   {.name = "left", .value = TitleBarButtonSide::Left},
                   {.name = "right", .value = TitleBarButtonSide::Right},
               }
+          ),
+          registry::custom<A::TitleBar>(
+              "buttons", registry::KeyDescription("string_array").withValues(titleBarButtonNames()),
+              [](const toml::node& node, const std::string& path, A::TitleBar& target, registry::ReadContext&) {
+                if (auto buttons = parseTitleBarButtons(node, path)) {
+                  target.buttons = std::move(*buttons);
+                }
+              },
+              [](const A::TitleBar& defaults) { return titleBarButtonsJson(defaults.buttons); }
           ),
       };
       static const registry::Fields<A::Blur> blur{
@@ -356,6 +367,52 @@ namespace umbriel {
     }
 
   } // namespace
+
+  namespace {
+    constexpr std::array<std::pair<std::string_view, TitleBarButton>, kTitleBarButtonCount> kTitleBarButtonNames{{
+        {"minimize", TitleBarButton::Minimize},
+        {"maximize", TitleBarButton::Maximize},
+        {"close", TitleBarButton::Close},
+    }};
+  } // namespace
+
+  std::vector<std::string_view> titleBarButtonNames() {
+    return kTitleBarButtonNames | std::views::keys | std::ranges::to<std::vector>();
+  }
+
+  std::optional<std::vector<TitleBarButton>> parseTitleBarButtons(const toml::node& node, const std::string& path) {
+    const std::vector<std::string_view> names = titleBarButtonNames();
+    const auto* array = node.as_array();
+    if (array == nullptr) {
+      warnAt(node.source(), "ignoring {} (expected an array of {})", path, registry::quotedList(names));
+      return std::nullopt;
+    }
+    std::vector<TitleBarButton> buttons;
+    for (const toml::node& entry : *array) {
+      const auto* value = entry.as_string();
+      const auto found = value != nullptr
+          ? std::ranges::find(kTitleBarButtonNames, value->get(), &std::pair<std::string_view, TitleBarButton>::first)
+          : kTitleBarButtonNames.end();
+      if (found == kTitleBarButtonNames.end()) {
+        warnAt(entry.source(), "ignoring {} entry (expected {})", path, registry::quotedList(names));
+        continue;
+      }
+      if (std::ranges::contains(buttons, found->second)) {
+        warnAt(entry.source(), R"(ignoring repeated {} entry "{}")", path, found->first);
+        continue;
+      }
+      buttons.push_back(found->second);
+    }
+    return buttons;
+  }
+
+  nlohmann::ordered_json titleBarButtonsJson(const std::vector<TitleBarButton>& buttons) {
+    nlohmann::ordered_json names = nlohmann::ordered_json::array();
+    for (const TitleBarButton button : buttons) {
+      names.push_back(kTitleBarButtonNames[static_cast<size_t>(button)].first);
+    }
+    return names;
+  }
 
   registry::Field<Config> colorsTable() { return registry::table("colors", &Config::colors, colorFields()); }
 

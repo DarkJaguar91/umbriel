@@ -6,8 +6,10 @@
 
 #include <array>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 struct wlr_scene_node;
 struct wlr_scene_rect;
@@ -30,6 +32,8 @@ namespace umbriel {
     void setTitle(std::string_view title);
     void setResizable(bool resizable);
     void setMaximizeEnabled(bool enabled);
+    // The buttons to show, from the title outward.
+    void setButtons(std::span<const TitleBarButton> buttons);
     void setMaximized(bool maximized);
     void setHovered(SsdFramePart part);
     void setPressed(SsdFramePart part);
@@ -58,6 +62,8 @@ namespace umbriel {
     wlr_scene_buffer* m_label = nullptr;
     wlr_scene_rect* m_close = nullptr;
     wlr_scene_rect* m_maximize = nullptr;
+    wlr_scene_rect* m_minimize = nullptr;
+    std::vector<TitleBarButton> m_buttons;
     std::array<wlr_scene_rect*, 4> m_grips{};
     std::shared_ptr<TabLabelCache> m_labels;
     ViewChromeGeometry m_geometry;
