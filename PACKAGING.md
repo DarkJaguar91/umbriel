@@ -80,8 +80,8 @@ distribution-provided LTO and archive member pruning.
 
 ### Build and link dependencies
 
-- wlroots 0.20.1 or newer, and strictly below 0.21, built with Xwayland support: `umbrielfx` compiles against
-  wlroots' private struct layouts
+- wlroots 0.20.1 or newer, and strictly below 0.21, built with session, libinput, and Xwayland support:
+  `umbrielfx` compiles against wlroots' private struct layouts
 - wayland-server 1.24 or newer, plus the Wayland client library
 - wayland-protocols 1.47 or newer
 - xkbcommon

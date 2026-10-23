@@ -83,51 +83,9 @@ HDR, VRR, and tearing are opt-in; see the [output reference](docs/user/outputs.m
 
 ## Building
 
-Distribution maintainers should also read [PACKAGING.md](PACKAGING.md) for the
-installed layout, dependency notes, and config fallback.
-
-The scene graph and renderer live in [`umbrielfx/`](umbrielfx/) and build as part of the tree. They are maintained as
-part of Umbriel rather than rebased onto upstream SceneFX; no separate SceneFX package is needed.
-
-### System build
-
-Install a C++23 compiler, Meson, Ninja, Just, pkg-config, wayland-scanner, and development packages for wlroots 0.20
-(0.20.1 or newer, built with Xwayland support), Wayland, wayland-protocols, xkbcommon, libinput, pixman, libdrm,
-libdisplay-info, EGL, GLES2, GBM, Cairo, Pango, tomlplusplus, nlohmann-json, xcb, xcb-icccm, and xcb-ewmh.
-Native `[drm]` GPU exclusions also require libudev, and the systemd-localed keymap default requires libsystemd. lcms2
-is optional. See [PACKAGING.md](PACKAGING.md#dependencies)
-for dependency version requirements and test-only dependencies. Then build Umbriel:
-
-```sh
-just release
-just install
-```
-
-`jemalloc` is optional but recommended on glibc: it returns freed memory to the OS promptly and bounds heap
-fragmentation in long-running sessions. Meson's `-Djemalloc=enabled` or `-Djemalloc=disabled` forces the choice; the
-default (`auto`) uses it when the development package is installed and skips it otherwise (non-glibc libc builds
-always skip it).
-
-The binaries are written to `build-debug/umbriel` and `build-release/umbriel`.
-
-### Nix
-
-Build the package directly:
-
-```sh
-nix build
-```
-
-The resulting binary is available at `result/bin/umbriel`. For development, enter the project shell and use the same
-Just recipes as a system build:
-
-```sh
-nix develop
-just debug
-```
-
-For unit tests, the headless compositor harness, and contributor checks, see
-[Development Commands](CONTRIBUTING.md#development-commands).
+See the [installation guide](docs/user/installation.md) for packages, source builds, Nix, and user-local installation.
+[PACKAGING.md](PACKAGING.md) covers distribution packaging and dependency requirements.
+[CONTRIBUTING.md](CONTRIBUTING.md#development-commands) covers development builds, tests, and checks.
 
 ## Running
 

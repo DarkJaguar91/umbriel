@@ -5,7 +5,8 @@ This file collects contributor-facing details for Umbriel: design goals, stack n
 style, source layout, commits, and debugging helpers. Umbriel shares its conventions with
 [noctalia](https://github.com/noctalia-dev/noctalia): same team, same style. If in doubt, match what noctalia does.
 
-For dependencies and normal build commands, start with [README.md](README.md). For what the project accepts and
+For dependencies and normal build commands, start with the [installation guide](docs/user/installation.md#manual-build).
+For what the project accepts and
 declines, read [SCOPE.md](SCOPE.md): it is the reference used when triaging feature requests and unsolicited pull
 requests.
 
@@ -57,6 +58,13 @@ The README covers routine builds and running Umbriel. Contributor checks and spe
 | `just install` | Build a release binary and install it with `meson install` |
 | `just clean <mode>` | Remove a build directory |
 | `just rebuild <mode>` | Clean and rebuild a build directory |
+
+Set installation paths with `just configure <mode> <prefix>` before building.
+Build and install recipes reuse Meson's stored prefix. Their automatic
+configure call does not forward `prefix=...` overrides. For the system-wide
+prefix, build as your user and install with
+`sudo meson install -C build-release --no-rebuild`; `just install` also runs
+the release build and is suitable without sudo for a writable prefix.
 
 The Nix development shell includes the clients and command-line tools used by the test suite:
 
@@ -393,8 +401,12 @@ scene helper from `libwlroots`; `umbrielfx_scene_check_helpers()` aborts startup
 Its regressions run in their own suite:
 
 ```sh
-meson test -C build-release --suite umbrielfx
+just configure debug
+meson test -C build-debug --suite umbrielfx
 ```
+
+For a configured release build, enable tests first with
+`meson configure build-release -Dtests=enabled`.
 
 Renderer ownership and descriptor stability need a real GPU, so that check is a
 tool rather than a suite entry: `umbrielfx-renderer-test` takes DRM render
