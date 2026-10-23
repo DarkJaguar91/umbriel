@@ -384,6 +384,8 @@ namespace umbriel {
     bool onlyWindow = false;
     // The client named a parent window for it.
     bool dialog = false;
+    // A live image-copy session reads this window's capture source: a window screencast or screenshot.
+    bool castTarget = false;
 
     [[nodiscard]] bool operator==(const WindowRuleState& other) const = default;
   };
@@ -419,6 +421,7 @@ namespace umbriel {
     std::optional<bool> matchAlone;
     std::optional<bool> matchOnlyWindow;
     std::optional<bool> matchDialog;
+    std::optional<bool> matchCastTarget;
     std::optional<bool> matchAtStartup;
     std::optional<std::string> defaultOutput;
     std::optional<bool> defaultFloating;
@@ -484,6 +487,7 @@ namespace umbriel {
           && matchAlone == other.matchAlone
           && matchOnlyWindow == other.matchOnlyWindow
           && matchDialog == other.matchDialog
+          && matchCastTarget == other.matchCastTarget
           && matchAtStartup == other.matchAtStartup
           && defaultOutput == other.defaultOutput
           && defaultFloating == other.defaultFloating
