@@ -408,6 +408,13 @@ namespace umbriel {
     }
     const Output* umbrielOutput = m_server->outputFromWlr(output);
     View* focused = View::fromSurface(seat->keyboard_state.focused_surface);
+    // Corner handling precedes pointer-output refocus. Use the destination's remembered focus when the seat is
+    // elsewhere, including click-to-focus sessions where crossing outputs does not move keyboard focus at all.
+    if (umbrielOutput != nullptr && (focused == nullptr || focused->currentOutput() != umbrielOutput)) {
+      const WorkspaceGroup* group = umbrielOutput->workspaceGroup();
+      const Workspace* workspace = group != nullptr ? group->active() : nullptr;
+      focused = workspace != nullptr ? workspace->focusedView() : nullptr;
+    }
     if (focused != nullptr
         && focused->mapped()
         && focused->onActiveWorkspace()

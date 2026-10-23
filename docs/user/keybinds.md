@@ -174,6 +174,10 @@ overlays before a trigger; disabled corners contribute no compilation roots.
 See [Effect actions](actions.md) and [Effects](effects.md#runtime-selection).
 
 Hot corners are inactive while the output's focused window is fullscreen.
+This check follows the output containing the corner, including when keyboard
+focus remains on another monitor. A fullscreen window on a different output or
+an inactive workspace does not block the corner. Neither does a retained
+fullscreen window after another window on that output takes focus.
 
 ## Cheatsheet
 
