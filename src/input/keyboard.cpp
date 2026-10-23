@@ -228,6 +228,7 @@ namespace umbriel {
   void Keyboard::handleModifiers() {
     wlr_seat* seat = m_server->seat()->wlr();
     if (m_syncingLayout) {
+      m_server->refreshKeyboardLeds();
       // A config reload can remap the seat's current keyboard to a differently
       // ordered matching group. Forward that current state, but never select or
       // forward a sibling keyboard merely because it was synchronized.

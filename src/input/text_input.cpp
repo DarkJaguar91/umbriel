@@ -217,6 +217,7 @@ namespace umbriel {
     }
 
     m_inputMethod = inputMethod;
+    m_server->refreshKeyboardLeds();
     m_inputMethodCommit.notify = onInputMethodCommit;
     wl_signal_add(&inputMethod->events.commit, &m_inputMethodCommit);
     m_inputMethodGrabKeyboard.notify = onInputMethodGrabKeyboard;
@@ -269,6 +270,7 @@ namespace umbriel {
       wlr_seat_set_keyboard(seat, grab->keyboard);
       wlr_seat_keyboard_notify_modifiers(seat, &grab->keyboard->modifiers);
     }
+    m_server->refreshKeyboardLeds();
   }
 
   void InputMethodRelay::handleInputMethodDestroy() {
@@ -278,6 +280,7 @@ namespace umbriel {
     removeListener(m_inputMethodNewPopup);
     removeListener(m_grabDestroy);
     m_inputMethod = nullptr;
+    m_server->refreshKeyboardLeds();
     updateTextInputFocus();
     updateActiveTextInput();
   }

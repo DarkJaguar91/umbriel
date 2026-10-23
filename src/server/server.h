@@ -139,6 +139,7 @@ namespace umbriel {
   class SyncobjUnmapRelease;
   class HintRect;
   class Keyboard;
+  class KeyboardLeds;
   class LayerSurface;
   class Output;
   class Overview;
@@ -459,6 +460,7 @@ namespace umbriel {
     void reassignOutputViews(Output* source, Output* destination);
     void scheduleDisplacedViewRestore();
     void rememberKeyboardInputSource(Keyboard& keyboard);
+    void refreshKeyboardLeds();
     void removeKeyboard(Keyboard* keyboard);
     void removeView(View* view);
     void removeLayerSurface(LayerSurface* layerSurface, wlr_output* output);
@@ -974,6 +976,7 @@ namespace umbriel {
 
     std::vector<std::unique_ptr<Output>> m_outputs;
     std::vector<std::unique_ptr<Keyboard>> m_keyboards;
+    std::unique_ptr<KeyboardLeds> m_keyboardLeds;
     std::vector<std::unique_ptr<ShortcutsInhibitorWatch>> m_shortcutsInhibitors;
     ManualShortcutsInhibit m_manualShortcutsInhibit;
     SurfaceLayoutMemory m_surfaceLayouts;

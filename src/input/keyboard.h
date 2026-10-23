@@ -25,8 +25,8 @@ namespace umbriel {
     Keyboard& operator=(const Keyboard&) = delete;
 
     [[nodiscard]] wlr_keyboard* wlr() const { return m_keyboard; }
-    // Virtual keyboards own their keymap and groups; nothing compositor-side
-    // may read or rotate them.
+    // Virtual keyboards own their keymap and groups; compositor configuration
+    // and layout synchronization must not replace or rotate them.
     [[nodiscard]] bool virtualDevice() const { return m_virtual; }
     void applyConfig();
     // Lock the next XKB group, wrapping at the end. False when this physical

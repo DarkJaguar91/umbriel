@@ -12,6 +12,7 @@
 #include "input/cursor.h"
 #include "input/gestures.h"
 #include "input/keyboard.h"
+#include "input/keyboard_leds.h"
 #include "input/seat.h"
 #include "input/text_input.h"
 #include "layer/layer_surface.h"
@@ -695,6 +696,10 @@ namespace umbriel {
     m_layerKeyboardFocusChange.notify = onLayerKeyboardFocusChange;
     wl_signal_add(&m_seat->wlr()->keyboard_state.events.focus_change, &m_layerKeyboardFocusChange);
     m_inputMethodRelay = std::make_unique<InputMethodRelay>(*this);
+    m_keyboardLeds =
+        std::make_unique<KeyboardLeds>(wl_display_get_event_loop(m_display), [this](wlr_keyboard* keyboard) {
+          return m_inputMethodRelay == nullptr || !m_inputMethodRelay->ownsKeyboard(keyboard);
+        });
     m_gestures = std::make_unique<Gestures>(*this);
     m_overview = std::make_unique<Overview>(*this);
     updateSeatCapabilities();
@@ -764,6 +769,7 @@ namespace umbriel {
 
   Server::~Server() {
     m_stopping = true;
+    m_keyboardLeds.reset();
     if (m_cursor != nullptr) {
       m_cursor->finishToplevelDrag(false);
     }

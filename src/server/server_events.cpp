@@ -6,6 +6,7 @@
 #include "input/cursor.h"
 #include "input/gestures.h"
 #include "input/keyboard.h"
+#include "input/keyboard_leds.h"
 #include "input/seat.h"
 #include "input/system_keymap.h"
 #include "input/text_input.h"
@@ -2098,6 +2099,7 @@ namespace umbriel {
     if (!seatHasKeyboard && keyboard->wlr()->keymap != nullptr) {
       wlr_seat_set_keyboard(seat, keyboard->wlr());
     }
+    m_keyboardLeds->add(keyboard->wlr(), keyboard->virtualDevice());
   }
 
   bool Server::cycleKeyboardLayout() {
@@ -3615,6 +3617,17 @@ namespace umbriel {
   void Server::rememberKeyboardInputSource(Keyboard& keyboard) {
     if (m_inputMethodRelay == nullptr || !m_inputMethodRelay->ownsKeyboard(keyboard.wlr())) {
       m_keyboardInputSource = &keyboard;
+      if (!m_stopping && m_keyboardLeds != nullptr) {
+        m_keyboardLeds->update(keyboard.wlr());
+      }
+    } else {
+      refreshKeyboardLeds();
+    }
+  }
+
+  void Server::refreshKeyboardLeds() {
+    if (!m_stopping && m_keyboardLeds != nullptr) {
+      m_keyboardLeds->update();
     }
   }
 
@@ -3624,6 +3637,9 @@ namespace umbriel {
     const bool sourceRemoved = m_keyboardLayoutSource == keyboard;
     if (m_keyboardInputSource == keyboard) {
       m_keyboardInputSource = nullptr;
+    }
+    if (m_keyboardLeds != nullptr) {
+      m_keyboardLeds->remove(keyboard->wlr());
     }
     std::erase_if(m_keyboards, [keyboard](const std::unique_ptr<Keyboard>& entry) { return entry.get() == keyboard; });
     if (seatKeyboardRemoved) {
