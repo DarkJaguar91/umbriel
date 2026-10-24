@@ -20,6 +20,7 @@ boundaries, or regression-sensitive behavior.
 - [Render performance](render-performance.md)
 - [Automatic HDR color feedback](automatic-hdr.md)
 - [Xwayland input stability](xwayland-input-stability.md)
+- [Xwayland input emulation](input-emulation.md)
 - [Client buffer constraints](client-buffer-constraints.md)
 - [Scene helper ownership](scene-helper-ownership.md)
 - [DRM GPU exclusion](drm-device-policy.md)

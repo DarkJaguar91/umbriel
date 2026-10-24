@@ -86,6 +86,7 @@ distribution-provided LTO and archive member pruning.
 - wayland-protocols 1.47 or newer
 - xkbcommon
 - libinput 1.27 or newer
+- libeis 1.5 or newer (provided by libei)
 - libudev, required for native `[drm]` GPU exclusion support
 - libsystemd 243 or newer, required to read the systemd-localed keymap for keyboards with no XKB configuration
 - pixman 0.43 or newer
@@ -95,7 +96,7 @@ distribution-provided LTO and archive member pruning.
 - tomlplusplus
 - nlohmann-json
 - xcb, xcb-icccm, and xcb-ewmh
-- xcb-render and xcb-xfixes when the `tests` feature is enabled
+- xcb-render, xcb-xfixes, xcb-xtest, and libei 1.5 or newer when the `tests` feature is enabled
 - EGL, GLES2, and GBM
 - lcms2, optional; without it `umbrielfx` rejects client ICC profiles and keeps only its parametric color transforms
 - jemalloc on glibc, optional

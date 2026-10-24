@@ -3354,6 +3354,7 @@ _PRIVATE = "kept"
 "HAS-HYPHEN" = "ignored"
 NOT_A_STRING = 1
 WAYLAND_DISPLAY = "wrong"
+LIBEI_SOCKET = "/nonexistent/umbriel-test-eis"
 WLR_DRM_DEVICES = "/dev/dri/card0"
 WLR_RENDER_DRM_DEVICE = "/dev/dri/renderD128"
 )");
@@ -3389,6 +3390,7 @@ WLR_RENDER_DRM_DEVICE = "/dev/dri/renderD128"
   CHECK(containsDiagnostic(store, R"(ignoring environment key "HAS-HYPHEN" (expected [A-Za-z_][A-Za-z0-9_]*))"));
   CHECK(containsDiagnostic(store, "ignoring environment.NOT_A_STRING (expected string)"));
   CHECK(containsDiagnostic(store, "ignoring environment.WAYLAND_DISPLAY (reserved by Umbriel)"));
+  CHECK(containsDiagnostic(store, "ignoring environment.LIBEI_SOCKET (reserved by Umbriel)"));
   CHECK(!containsDiagnostic(store, "unknown key environment.DXVK_HDR"));
   CHECK(!containsDiagnostic(store, "unknown key environment._PRIVATE"));
 }
