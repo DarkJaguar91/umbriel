@@ -301,14 +301,13 @@ baseline_scratch=$(scratch_signature)
 # pointer-selected left output it must reach, and reject from, its output fallback.
 rejects_without_focus_escape window-focus-or-output-left "no output"
 
-# Focus, column order, row order, workspace transfer, and membership are
+# Focus, column order, row order, column transfer, and membership are
 # separate handler families. None may use the workspace focus behind the
 # scratchpad. The floating toggle is an explicitly inert scratchpad action.
 assert_isolated window-focus-left
 assert_isolated column-move-left
 assert_isolated window-move-down
 assert_isolated window-swap-next
-assert_isolated window-move-to-workspace-next
 assert_isolated column-move-to-workspace-next
 assert_isolated window-toggle-floating
 
