@@ -18,6 +18,7 @@ boundaries, or regression-sensitive behavior.
 - [Toplevel data drags](toplevel-drag.md)
 - [Border rendering](border-rendering.md)
 - [Render performance](render-performance.md)
+- [Automatic HDR color feedback](automatic-hdr.md)
 - [Xwayland input stability](xwayland-input-stability.md)
 - [Client buffer constraints](client-buffer-constraints.md)
 - [Scene helper ownership](scene-helper-ownership.md)

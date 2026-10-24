@@ -30,9 +30,10 @@ namespace umbriel {
   [[nodiscard]] ColorLuminances defaultColorLuminances(uint32_t transferFunction);
   [[nodiscard]] bool colorDescriptionsEqual(const ColorDescription& left, const ColorDescription& right);
 
-  // The SDR reference white is adjustable only while composing into a PQ output.
-  // Display metadata describes the target volume independently of the PQ encoding.
-  [[nodiscard]] ColorDescription
-  outputColorDescription(const wlr_output_image_description* outputDescription, float effectiveSdrWhite);
+  // Automatic HDR offers a PQ encoding before scanout switches. Its target
+  // volume still describes the current output, independently of that encoding.
+  [[nodiscard]] ColorDescription outputColorDescription(
+      const wlr_output_image_description* outputDescription, float effectiveSdrWhite, bool automaticHdrAvailable = false
+  );
 
 } // namespace umbriel
