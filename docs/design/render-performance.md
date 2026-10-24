@@ -162,6 +162,27 @@ capture pixels throughout those transitions.
 
 ## Per-frame work outside the render pass
 
+### Internal framebuffer texture views
+
+Renderer-owned offscreen buffers keep their EGLImage texture binding until
+their storage is destroyed. Rendering into the buffer updates the same image
+storage, so the output color-transform pass can sample fresh pixels without
+calling `glEGLImageTargetTexture2DOES` again. Replacing the buffer after a size
+or format change creates a new texture binding. Client-produced 2D DMA-BUFs
+retain their refresh on each import.
+
+This removes repeated EGLImage reattachment from the output color-transform
+pass. A DDC-enabled NVIDIA trace attributed the dominant driver stalls to DMA
+unmap/free calls during that reattachment and map calls during the following
+draw. The earlier gamma query optimization did not resolve the reported lag.
+The effect of retaining the internal texture binding on those driver stalls
+still needs measurement on the affected system with DDC enabled.
+
+`color-framebuffer-texture-binding` counts real EGLImage attachments and checks
+live pixels across an FP16 buffer update, storage replacement, and repeated
+client-buffer imports. Restoring unconditional reattachment must fail the
+owned-buffer reuse check.
+
 ### Gamma capability queries
 
 Scene construction queries hardware gamma capability only when a gamma
@@ -172,8 +193,8 @@ Active gamma transforms retain the capability check on each build, so the
 result follows the current output state. Removing a shader gamma transform
 still damages the whole output and rebuilds the combined color transform.
 
-This reduces unnecessary DRM work; its effect on DDC-triggered stalls requires
-verification on the affected hardware.
+This reduces unnecessary DRM work, but did not resolve the reported
+DDC-triggered lag on the affected hardware.
 
 ### Hardware-cursor capture pacing
 

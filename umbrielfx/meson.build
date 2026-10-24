@@ -234,6 +234,7 @@ if build_tests
     'shared-sdr-capture-lock',
     'shared-sdr-capture-storage-change',
     'capture-read-format',
+    'framebuffer-texture-binding',
   ]
     test(
       'color-' + case_name,

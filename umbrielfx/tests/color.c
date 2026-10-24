@@ -2917,6 +2917,125 @@ static bool test_optimized_blur_format_cache(struct fixture* fixture) {
   return check(abs(actual - expected) <= 24, "format-mismatched optimized-blur cache is not reused");
 }
 
+static PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_target_texture;
+static size_t image_target_texture_calls;
+
+static void GL_APIENTRY count_image_target_texture(GLenum target, GLeglImageOES image) {
+  image_target_texture_calls++;
+  image_target_texture(target, image);
+}
+
+static bool sample_framebuffer_view(
+    struct fixture* fixture, struct fx_framebuffer* source, struct wlr_buffer* target, float red,
+    size_t expected_bindings, const char* binding_label
+) {
+  struct wlr_render_pass* paint = wlr_renderer_begin_buffer_pass(fixture->renderer, source->buffer, NULL);
+  if (!check(paint != NULL, "begin framebuffer view update")
+      || !check(
+          submit_solid_frame(paint, source->buffer->width, source->buffer->height, red), "update framebuffer pixels"
+      )) {
+    return false;
+  }
+
+  struct wlr_texture* texture = fx_texture_from_buffer(fixture->renderer, source->buffer);
+  if (!check(texture != NULL, "import framebuffer view")) {
+    return false;
+  }
+  if (image_target_texture_calls != expected_bindings) {
+    fprintf(
+        stderr, "%s: got %zu image bindings, expected %zu after rendering red %.1f\n", binding_label,
+        image_target_texture_calls, expected_bindings, red
+    );
+  }
+  bool ok = check(image_target_texture_calls == expected_bindings, binding_label);
+  struct wlr_render_pass* pass = wlr_renderer_begin_buffer_pass(fixture->renderer, target, NULL);
+  if (!check(pass != NULL, "begin framebuffer view sampling")) {
+    wlr_texture_destroy(texture);
+    return false;
+  }
+  wlr_render_pass_add_texture(
+      pass,
+      &(struct wlr_render_texture_options){
+          .texture = texture,
+          .dst_box = {.width = TEST_WIDTH, .height = TEST_HEIGHT},
+          .filter_mode = WLR_SCALE_FILTER_NEAREST,
+          .blend_mode = WLR_RENDER_BLEND_MODE_NONE,
+      }
+  );
+  ok = check(wlr_render_pass_submit(pass), "sample framebuffer view") && ok;
+  wlr_texture_destroy(texture);
+
+  uint8_t pixel[4] = {0};
+  const uint8_t expected[4] = {to_u8(0.5f), to_u8(0.25f), to_u8(red), 255};
+  ok = fixture_read_display_pixel(fixture, target, TEST_WIDTH / 2, TEST_HEIGHT / 2, pixel) && ok;
+  return check(codes_close(pixel, expected, 1), "framebuffer view samples the latest rendered pixels") && ok;
+}
+
+// Count real EGLImage attachment calls while sampling pixels, including a
+// renderbuffer update after the internal texture view has been established.
+static bool test_framebuffer_texture_binding(struct fixture* fixture) {
+  struct fx_renderer* renderer = fx_get_renderer(fixture->renderer);
+  struct wlr_egl_context previous;
+  if (!check(wlr_egl_make_current(renderer->egl, &previous), "activate framebuffer view context")) {
+    return false;
+  }
+  image_target_texture = renderer->procs.glEGLImageTargetTexture2DOES;
+  image_target_texture_calls = 0;
+  renderer->procs.glEGLImageTargetTexture2DOES = count_image_target_texture;
+
+  bool ok = true;
+  bool failed = false;
+  struct fx_framebuffer* owned = NULL;
+  struct wlr_buffer* external = NULL;
+  struct wlr_buffer* target = create_output_buffer(fixture, DRM_FORMAT_ARGB8888, TEST_WIDTH, TEST_HEIGHT);
+  fx_framebuffer_get_or_create_custom(
+      renderer, fixture->allocator, TEST_WIDTH, TEST_HEIGHT, DRM_FORMAT_ABGR16161616F, &owned, &failed
+  );
+  if (!check(target != NULL && !failed && owned != NULL && owned->owned, "create internal framebuffer view")) {
+    ok = false;
+    goto out;
+  }
+  ok = sample_framebuffer_view(fixture, owned, target, 0.2f, 1, "first owned import attaches one EGLImage") && ok;
+  ok = sample_framebuffer_view(fixture, owned, target, 0.8f, 1, "owned framebuffer update reuses its EGLImage binding")
+      && ok;
+
+  fx_framebuffer_get_or_create_custom(
+      renderer, fixture->allocator, TEST_WIDTH / 2, TEST_HEIGHT, DRM_FORMAT_ABGR8888, &owned, &failed
+  );
+  if (!check(
+          !failed && owned != NULL && owned->buffer->width == TEST_WIDTH / 2, "replace internal framebuffer storage"
+      )) {
+    ok = false;
+    goto out;
+  }
+  ok = sample_framebuffer_view(fixture, owned, target, 0.4f, 2, "replaced storage attaches a new EGLImage") && ok;
+  ok = sample_framebuffer_view(fixture, owned, target, 0.6f, 2, "replacement update reuses its EGLImage binding") && ok;
+
+  external = create_output_buffer(fixture, DRM_FORMAT_ABGR8888, TEST_WIDTH, TEST_HEIGHT);
+  struct fx_framebuffer* imported = external != NULL ? fx_framebuffer_get_or_create(renderer, external) : NULL;
+  if (!check(imported != NULL && !imported->owned && !imported->external_only, "create external framebuffer view")) {
+    ok = false;
+    goto out;
+  }
+  ok = sample_framebuffer_view(fixture, imported, target, 0.3f, 3, "first external import attaches its EGLImage") && ok;
+  ok = sample_framebuffer_view(fixture, imported, target, 0.7f, 4, "external update reattaches its EGLImage") && ok;
+
+out:
+  renderer->procs.glEGLImageTargetTexture2DOES = image_target_texture;
+  image_target_texture = NULL;
+  if (external != NULL) {
+    wlr_buffer_drop(external);
+  }
+  if (owned != NULL) {
+    wlr_buffer_drop(owned->buffer);
+  }
+  if (target != NULL) {
+    wlr_buffer_drop(target);
+  }
+  wlr_egl_restore_context(&previous);
+  return ok;
+}
+
 int main(int argc, char* argv[]) {
   if (argc != 2) {
     fprintf(stderr, "usage: %s CASE\n", argv[0]);
@@ -2997,6 +3116,8 @@ int main(int argc, char* argv[]) {
     ok = test_shared_sdr_capture_storage_change(&fixture);
   } else if (strcmp(argv[1], "capture-read-format") == 0) {
     ok = test_capture_read_format(&fixture);
+  } else if (strcmp(argv[1], "framebuffer-texture-binding") == 0) {
+    ok = test_framebuffer_texture_binding(&fixture);
   } else {
     fprintf(stderr, "unknown case: %s\n", argv[1]);
     ok = false;
