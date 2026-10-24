@@ -724,7 +724,7 @@ namespace umbriel {
       struct Blur {
         bool enabled = true;
         bool optimized = true;
-        int passes = 3;
+        int passes = 2;
         int radius = 5;
         double noise = 0.02;
         double brightness = 0.9;
