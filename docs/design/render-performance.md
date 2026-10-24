@@ -162,6 +162,19 @@ capture pixels throughout those transitions.
 
 ## Per-frame work outside the render pass
 
+### Gamma capability queries
+
+Scene construction queries hardware gamma capability only when a gamma
+transform exists and the renderer supports output color transforms. Frames
+without a gamma transform skip this synchronous backend lookup. On atomic
+DRM, the lookup reads properties while acquiring the device's modeset locks.
+Active gamma transforms retain the capability check on each build, so the
+result follows the current output state. Removing a shader gamma transform
+still damages the whole output and rebuilds the combined color transform.
+
+This reduces unnecessary DRM work; its effect on DDC-triggered stalls requires
+verification on the affected hardware.
+
 ### Hardware-cursor capture pacing
 
 **Invariant:** a plane-cursor transition on an output whose capture source

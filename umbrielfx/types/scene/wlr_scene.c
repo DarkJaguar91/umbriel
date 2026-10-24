@@ -5884,7 +5884,11 @@ static bool scene_output_build_state(
   }
 
   struct wlr_color_transform* gamma_lut = NULL;
-  if (wlr_output_get_gamma_size(output) == 0 && output->renderer->features.output_color_transform) {
+  // The DRM gamma capability query takes modeset locks. Only query when a
+  // shader gamma transform could actually be applied.
+  if (scene_output->gamma_lut_color_transform != NULL
+      && output->renderer->features.output_color_transform
+      && wlr_output_get_gamma_size(output) == 0) {
     gamma_lut = scene_output->gamma_lut_color_transform;
   }
   const bool render_gamma_lut = gamma_lut != NULL;
