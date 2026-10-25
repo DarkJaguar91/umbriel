@@ -30,6 +30,11 @@ namespace umbriel {
   [[nodiscard]] ColorLuminances defaultColorLuminances(uint32_t transferFunction);
   [[nodiscard]] bool colorDescriptionsEqual(const ColorDescription& left, const ColorDescription& right);
 
+  // HDR encodings can carry SDR content. A known content peak at or below
+  // reference white does not request an automatic display mode switch unless
+  // the client also supplies HDR mastering luminance.
+  [[nodiscard]] bool colorDescriptionRequestsHdrOutput(const ColorDescription& description);
+
   // Automatic HDR offers a PQ encoding before scanout switches. Its target
   // volume still describes the current output, independently of that encoding.
   [[nodiscard]] ColorDescription outputColorDescription(

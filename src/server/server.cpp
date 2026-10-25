@@ -1007,10 +1007,8 @@ namespace umbriel {
           if (description == nullptr) {
             return;
           }
-          const bool pqBt2020 = description->tf_named == WP_COLOR_MANAGER_V1_TRANSFER_FUNCTION_ST2084_PQ
-              && description->primaries_named == WP_COLOR_MANAGER_V1_PRIMARIES_BT2020;
           const ColorManager* colorManager = context->server->colorManager();
-          if (pqBt2020 || (colorManager != nullptr && colorManager->surfaceRequiresHdrOutput(candidate))) {
+          if (colorManager != nullptr && colorManager->surfaceRequiresHdrOutput(candidate)) {
             context->description = description;
           }
         },

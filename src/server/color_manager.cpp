@@ -1143,7 +1143,7 @@ namespace umbriel {
     const auto found = m_impl->surfaces.find(surface);
     return found != m_impl->surfaces.end()
         && found->second->current.set
-        && found->second->current.description.requiresHdrOutput;
+        && colorDescriptionRequestsHdrOutput(found->second->current.description);
   }
 
   bool ColorManager::registerScene(wlr_scene* scene) { return m_impl->registerScene(scene); }
