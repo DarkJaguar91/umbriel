@@ -10,10 +10,12 @@ Unmapping detaches the toplevel without ending its data drag. A later attach can
 
 Drop placement runs through the normal window-drop path. The protocol object can be destroyed after `dnd_drop_performed`, even if another button keeps wlroots' pointer grab alive. Once dropped, pointer and scene refreshes must not select a new data target: doing so resets the source's accepted state and can reject the recipient's `wl_data_offer.finish` request. Window geometry events report the carried position until normal placement resumes.
 
+Releasing a carried window where no client accepts the offer is a tear-off, not a cancellation. wlroots would destroy the source, which sends `cancelled`, and the protocol tells clients to revert a cancelled drag. The manager instead sends `dnd_drop_performed` and `dnd_finished`, then ends the pointer grab so the drag's destroy path places the window. A release with no carried window keeps wlroots' cancellation.
+
 ## wlroots boundary
 
 wlroots 0.20 has no public conversion from a `wl_data_source` resource to its `wlr_data_source`. Its resource user data points to `wlr_client_data_source`, whose first member is the public data source. The manager uses that address only as an identity when matching seat events; it never reads private tail fields. Recheck this prefix assumption when changing the pinned wlroots series. Other protocol objects use wlroots' public conversion functions.
 
 ## Verification
 
-`drag/toplevel_drag` covers attachment order, unmap and reattach, origin removal, all three layouts, underlying drop delivery, rendered carried content, and a drop while another button remains held. `drag/toplevel_drag_outputs` checks rendering on both sides of an output boundary, logical offsets at scale 2, and destination-workspace placement. `drag/toplevel_drag_lifecycle` covers protocol errors and source, role, and client teardown.
+`drag/toplevel_drag` covers attachment order, unmap and reattach, origin removal, all three layouts, underlying drop delivery, rendered carried content, and a drop while another button remains held. `drag/toplevel_drag_outputs` checks rendering on both sides of an output boundary, logical offsets at scale 2, and destination-workspace placement. `drag/toplevel_drag_lifecycle` covers protocol errors and source, role, and client teardown. `drag/toplevel_drag_empty` drops a carried window over empty space and checks that the source finishes instead of cancelling and the window is placed.
