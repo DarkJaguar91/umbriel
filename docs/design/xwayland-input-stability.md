@@ -75,6 +75,24 @@ focused, which is why wlroots normally prefers `PointerRoot`. Umbriel limits
 that tradeoff to a real Xwayland-to-native transfer and lets wlroots restore
 normal X focus when the seat returns to Xwayland.
 
+## NoInput windows preserve the typing target
+
+An X11 window with `WM_HINTS.input = False` and no `WM_TAKE_FOCUS` protocol
+uses ICCCM's NoInput model. Steam's on-screen keyboard advertises these hints
+as a utility window. Mapping it or interacting with its pointer surface must
+not activate it or replace the seat's keyboard owner.
+
+`View::acceptsKeyboardFocus()` reads wlroots' ICCCM input-model classification.
+The focus manager rejects NoInput targets before changing activation, window
+recency, or workspace focus. The seat-focus mechanism checks the same
+eligibility, and replacement focus skips NoInput windows. If a focused client
+changes its hints to NoInput, Umbriel clears its keyboard focus and selects
+an eligible replacement. Pointer hit testing and delivery remain available.
+
+This follows window hints rather than Steam titles or application identities.
+An `Input=False` client that implements `WM_TAKE_FOCUS` has a different input
+model and is not classified as NoInput.
+
 ## Native selections are reannounced on X11 focus return
 
 wlroots publishes Wayland clipboard ownership changes immediately, including
@@ -206,6 +224,19 @@ Its X11 consumer reads targets and text on ownership notifications, then
 reports its cache without a paste-time retry. It checks repeated native
 updates, fullscreen, primary selection, background-read denial, preserved
 X11-owned sources, and clears. Run it as `just check protocol/xwayland_selection`.
+
+NoInput focus is covered by
+[`tests/harness/checks/focus/xwayland_no_input.sh`](../../tests/harness/checks/focus/xwayland_no_input.sh).
+It reproduces Steam's utility-window hints and requires native keyboard
+ownership and real XTest typing to survive mapping, hovering, clicking,
+explicit focus requests, and closing the overlay. An ordinary X11 window
+still receives focus, and closing it restores the native typing target while
+the NoInput overlay remains open. Run it as
+`just check focus/xwayland_no_input`.
+
+The same check temporarily changes the mapped overlay to accept input,
+verifies X11 key delivery, then changes its hints back to NoInput and requires
+a new native keyboard-enter event and restored typing.
 
 Theme cursor identity is covered by
 [`tests/unit/xcursor_matcher.cpp`](../../tests/unit/xcursor_matcher.cpp),

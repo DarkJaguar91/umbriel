@@ -1576,10 +1576,14 @@ namespace umbriel {
     const int rowIndex = m_layout->rowOf(view);
     const auto& columns = m_layout->columns();
     const auto mappedCandidate = [view](View* candidate) {
-      return candidate != nullptr && candidate != view && candidate->mapped() && !candidate->minimized();
+      return candidate != nullptr
+          && candidate != view
+          && candidate->mapped()
+          && !candidate->minimized()
+          && candidate->inputDelegate()->acceptsKeyboardFocus();
     };
 
-    if (View* parent = view->shellParent(); parent != nullptr && parent->workspace() == this && !parent->minimized()) {
+    if (View* parent = view->shellParent(); mappedCandidate(parent) && parent->workspace() == this) {
       return parent;
     }
 
@@ -1587,7 +1591,7 @@ namespace umbriel {
     // workspace, since nothing else refocuses until a destroy-time fallback that unmap-only clients never reach.
     if (columnIndex < 0 || columnIndex >= static_cast<int>(columns.size())) {
       for (const auto& entry : m_group->server()->registry().placementRoots()) {
-        if (entry.get() != view && entry->mapped() && !entry->minimized() && entry->workspace() == this) {
+        if (mappedCandidate(entry.get()) && entry->workspace() == this) {
           return entry.get();
         }
       }

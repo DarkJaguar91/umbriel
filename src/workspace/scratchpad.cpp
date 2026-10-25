@@ -913,6 +913,9 @@ namespace umbriel {
       return true;
     }
     if (View* view = focused(name)) {
+      if (!view->inputDelegate()->acceptsKeyboardFocus()) {
+        return false;
+      }
       m_server->focusView(view);
     } else if (m_server->exclusiveKeyboardLayer() != nullptr) {
       m_server->refocus();
@@ -971,6 +974,7 @@ namespace umbriel {
     if (output == nullptr
         || m_focusedView == nullptr
         || !m_focusedView->mapped()
+        || !m_focusedView->inputDelegate()->acceptsKeyboardFocus()
         || !m_focusedView->onActiveWorkspace()) {
       return nullptr;
     }
@@ -1073,6 +1077,7 @@ namespace umbriel {
       if (entry.scratchpad == name
           && entry.view != nullptr
           && entry.view->mapped()
+          && entry.view->inputDelegate()->acceptsKeyboardFocus()
           && presents(*scratchpad, entry.view)) {
         views.push_back(entry.view);
       }

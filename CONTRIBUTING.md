@@ -31,13 +31,13 @@ Direct project dependencies. Transitive dependencies are owned by their providin
 | Compositor framework | `wlroots-0.20` |
 | Scene graph and effects | `umbrielfx` (blur, shadows, rounded corners; maintained in-tree) |
 | Wayland core | `wayland-server`, `wayland-client`, `wayland-protocols`, `wayland-scanner` |
-| Input | `libinput`, `xkbcommon`, `libeis`, `libsystemd` (sd-bus, optional: the systemd-localed keymap) |
+| Input | `libinput`, `xkbcommon`, `libeis >= 1.3`, `libsystemd` (sd-bus, optional: the systemd-localed keymap) |
 | Graphics | `pixman`, `libdrm`, OpenGL via wlroots |
 | Text | `cairo`, `pangocairo` |
 | Memory allocation | `jemalloc` (optional, glibc) |
 | Config | `tomlplusplus` |
 | JSON (IPC) | `nlohmann/json` |
-| Xwayland | wlroots' Xwayland server (`Xwayland` spawned on demand), `xcb`, `xcb-icccm`, `xcb-ewmh`; test-only `xcb-render`, `xcb-xfixes`, `xcb-xtest`, and `libei` |
+| Xwayland | wlroots' Xwayland server (`Xwayland` spawned on demand), `xcb`, `xcb-icccm`, `xcb-ewmh`; test-only `xcb-render`, `xcb-xfixes`, `xcb-xtest`, and `libei >= 1.3` |
 
 ## Development Commands
 

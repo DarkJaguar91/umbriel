@@ -23,6 +23,7 @@ unit_tests = [
   ['modifier-tap', ['unit/modifier_tap.cpp'], []],
   ['keyboard-layout', ['unit/keyboard_layout.cpp'], []],
   ['keyboard-leds', ['unit/keyboard_leds.cpp'], [wayland_server_dep]],
+  ['eis-socket', ['unit/eis_socket.cpp'], [umbriel_core_dep, wayland_server_dep]],
   ['surface-layouts', ['unit/surface_layouts.cpp'], []],
   ['shortcuts-inhibit', ['unit/shortcuts_inhibit.cpp'], []],
   ['shortcut-keysym', ['unit/shortcut_keysym.cpp'], []],
@@ -407,7 +408,7 @@ xwayland_input_client = executable(
 ei_peer_client = executable(
   'ei-peer-client',
   ['harness/clients/ei_peer_client.cpp'],
-  dependencies: [dependency('libei-1.0', version: '>=1.5')],
+  dependencies: [dependency('libei-1.0', version: '>=1.3')],
 )
 
 # Eager X11 selection reader and owner for clipboard focus transitions.

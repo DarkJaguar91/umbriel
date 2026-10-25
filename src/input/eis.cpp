@@ -3,6 +3,7 @@
 #include "config/config.h"
 #include "core/log.h"
 #include "input/cursor.h"
+#include "input/eis_socket.h"
 #include "input/event_time.h"
 #include "input/keyboard.h"
 #include "input/keyboard_layout.h"
@@ -16,14 +17,11 @@
 #include <array>
 #include <cerrno>
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
 #include <libeis.h>
 #include <limits>
 #include <linux/input-event-codes.h>
 #include <string>
-#include <unistd.h>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -194,6 +192,7 @@ namespace umbriel {
     eis* context = nullptr;
     wl_event_source* eventSource = nullptr;
     wl_event_source* updateSource = nullptr;
+    std::unique_ptr<EisSocket> socket;
     int socketFd = -1;
     uint64_t nextId = 0;
     bool locked = false;
@@ -215,35 +214,26 @@ namespace umbriel {
         wl_event_source_remove(updateSource);
       }
       clients.clear();
-      if (socketFd >= 0) {
-        close(socketFd);
-      }
+      socket.reset();
       if (context != nullptr) {
         eis_unref(context);
       }
     }
 
     void initialize() {
-      const char* runtime = std::getenv("XDG_RUNTIME_DIR");
-      if (runtime == nullptr) {
-        kLog.error("XDG_RUNTIME_DIR is unavailable for input emulation");
-        return;
-      }
-      std::string directory = std::string(runtime) + "/umbriel-eis.XXXXXX";
-      if (mkdtemp(directory.data()) == nullptr) {
-        kLog.error("failed to create private input socket directory: {}", std::strerror(errno));
-        return;
-      }
-      const std::string path = directory + "/socket";
       context = eis_new(this);
-      const int result = context == nullptr ? -ENOMEM : eis_setup_backend_socket(context, path.c_str());
-      if (result == 0) {
-        socketFd = open(path.c_str(), O_PATH | O_CLOEXEC);
+      const int result = context == nullptr ? -ENOMEM : eis_setup_backend_fd(context);
+      if (result != 0) {
+        kLog.error("failed to create input emulation backend: {}", std::strerror(-result));
+        return;
       }
-      unlink(path.c_str());
-      rmdir(directory.c_str());
-      if (result != 0 || socketFd < 0) {
-        kLog.error("failed to create private input socket: {}", std::strerror(result != 0 ? -result : errno));
+      socket = std::make_unique<EisSocket>(
+          wl_display_get_event_loop(server.display()),
+          [this](pid_t pid) { return !locked && !server.sessionLocked() && authenticate && authenticate(pid); },
+          [this] { return eis_backend_fd_add_client(context); }
+      );
+      socketFd = socket->fd();
+      if (socketFd < 0) {
         return;
       }
       eventSource = wl_event_loop_add_fd(
@@ -255,20 +245,17 @@ namespace umbriel {
           this
       );
       if (eventSource == nullptr) {
-        close(socketFd);
+        socket.reset();
         socketFd = -1;
         kLog.error("failed to watch input emulation events");
       }
     }
 
     void requestClient(eis_client* handle) {
-      const pid_t pid = eis_backend_socket_get_client_pid(handle);
       const char* name = eis_client_get_name(handle);
       if (locked
           || server.sessionLocked()
           || !eis_client_is_sender(handle)
-          || !authenticate
-          || !authenticate(pid)
           || name == nullptr
           || *name == '\0'
           || !authorize) {

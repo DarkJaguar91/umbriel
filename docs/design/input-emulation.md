@@ -6,6 +6,9 @@ receives them through libeis and feeds native wlroots keyboard and pointer
 devices into the existing input paths. This preserves compositor shortcuts,
 focus, pointer constraints, and input-method handling.
 
+The required server API is `libeis-1.0 >= 1.3`, supplied by libei. The test
+sender also requires `libei-1.0 >= 1.3`.
+
 ## Connection and consent
 
 Umbriel creates an EIS socket in a private runtime directory, opens its inode
@@ -21,6 +24,14 @@ device and inode in the server-start callback and matches them against the
 peer's descriptors through `/proc`. This authenticates the actual Xwayland
 process despite wlroots' double fork. Merely discovering the EIS endpoint or
 claiming an allowed application name does not authenticate another process.
+
+Umbriel owns the listening socket and reads `SO_PEERCRED` on each accepted
+connection before creating a libeis client. Authenticated connections are
+bridged into libeis' FD backend, which is available in 1.3. This avoids the
+socket-backend PID API introduced in 1.5. The bridge preserves stream order
+and `SCM_RIGHTS` descriptors, including keyboard keymaps, with nonblocking
+backpressure and bounded connection, byte, packet, and descriptor queues.
+Disconnects release both transport endpoints and queued descriptors.
 
 Each authenticated EI connection supplies an X11 application name. The first
 request displays a compositor confirmation; pending clients receive no seat
@@ -53,6 +64,11 @@ withheld during lock. Lock-surface cleanup after unlock cannot replace the
 desktop keyboard focus that the unlock handler restored.
 
 ## Verification
+
+`tests/unit/eis_socket.cpp` exercises real Unix sockets and the Wayland event
+loop: peer credentials and rejection before backend creation, bidirectional
+backpressure and stream order, keymap descriptor forwarding, truncated-control
+rejection without descriptor leaks, and half-close draining and cleanup.
 
 The real XTest sender in `tests/harness/clients/xwayland_input_client.cpp`
 maps no X11 window. Its input must reach native Wayland observer windows to
