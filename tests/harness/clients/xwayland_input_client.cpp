@@ -68,7 +68,7 @@ namespace {
     } else if (command == "press" || command == "release" || command == "tap") {
       unsigned int key = 0;
       if (stream >> key && key <= 247) {
-        const uint8_t code = static_cast<uint8_t>(key + 8);
+        const auto code = static_cast<uint8_t>(key + 8);
         if (command == "release") {
           return sendInput(state, XCB_KEY_RELEASE, code);
         }
@@ -81,7 +81,7 @@ namespace {
           && button > 0
           && button <= std::numeric_limits<uint8_t>::max()
           && (command == "click" || (stream >> pressed && pressed <= 1))) {
-        const uint8_t code = static_cast<uint8_t>(button);
+        const auto code = static_cast<uint8_t>(button);
         return sendInput(state, pressed != 0 ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE, code)
             && (command != "click" || sendInput(state, XCB_BUTTON_RELEASE, code));
       }
