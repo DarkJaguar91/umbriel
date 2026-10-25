@@ -998,6 +998,8 @@ namespace umbriel {
         continue;
       }
       if (view->layoutFullscreen()) {
+        // Fullscreen openers bypass tiled admission, including a request received before the first tiled arrange.
+        view->resumeTiledOpening();
         const wlr_box target = fullscreenTargetBox(view);
         if (view->fullscreenOpeningActive()) {
           // windows_in carries the node while the opener scales inside this box; the layout keeps only the target.
