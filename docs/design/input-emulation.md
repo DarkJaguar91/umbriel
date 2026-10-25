@@ -8,6 +8,8 @@ focus, pointer constraints, and input-method handling.
 
 The required server API is `libeis-1.0 >= 1.3`, supplied by libei. The test
 sender also requires `libei-1.0 >= 1.3`.
+The Arch CI build and lint jobs install `libei`; the Alpine CI build installs
+`libei-dev`. These packages supply both pkg-config modules.
 
 ## Connection and consent
 
