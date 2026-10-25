@@ -9,6 +9,8 @@
 // and p to report pointer position; it also logs relative motion during client locks.
 // SHORTCUTS_INHIBIT_CONTROL accepts i/u to create/destroy a shortcut inhibitor.
 // REDRAW_CONTROL accepts a byte on stdin to commit another frame at the current size.
+// TEXT_INPUT_LATE_STATE (with ENABLE_TEXT_INPUT) sets surrounding text and content type in a
+// commit after the one that enables the text input, as Chromium does.
 
 #include "keyboard-shortcuts-inhibit-unstable-v1-client-protocol.h"
 #include "pointer-constraints-unstable-v1-client-protocol.h"
@@ -83,6 +85,7 @@ namespace {
     bool actionRequested = false;
     std::optional<uint32_t> moveSerial;
     bool useTextInput = false;
+    bool lateTextInputState = false;
     bool logModifiers = false;
     // Surface-local pointer position from the latest enter or motion.
     double pointerX = 0;
@@ -139,6 +142,13 @@ namespace {
     }
     zwp_text_input_v3_enable(textInput);
     zwp_text_input_v3_commit(textInput);
+    if (state.lateTextInputState) {
+      zwp_text_input_v3_set_surrounding_text(textInput, "late text", 9, 9);
+      zwp_text_input_v3_set_content_type(
+          textInput, ZWP_TEXT_INPUT_V3_CONTENT_HINT_SPELLCHECK, ZWP_TEXT_INPUT_V3_CONTENT_PURPOSE_URL
+      );
+      zwp_text_input_v3_commit(textInput);
+    }
     std::println("text-input-enter");
   }
 
@@ -505,6 +515,7 @@ int main(int argc, char** argv) {
   state.redrawControl = std::getenv("REDRAW_CONTROL") != nullptr;
   state.holdResize = std::getenv("HOLD_RESIZE") != nullptr;
   state.useTextInput = std::getenv("ENABLE_TEXT_INPUT") != nullptr;
+  state.lateTextInputState = std::getenv("TEXT_INPUT_LATE_STATE") != nullptr;
   state.logModifiers = std::getenv("LOG_MODIFIERS") != nullptr;
   if (mode == "move-on-press") {
     state.pressAction = PressAction::Move;
