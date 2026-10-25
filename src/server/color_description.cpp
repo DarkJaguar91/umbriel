@@ -65,6 +65,17 @@ namespace umbriel {
         && left.requiresHdrOutput == right.requiresHdrOutput;
   }
 
+  bool colorDescriptionRequestsHdrOutput(const ColorDescription& description) {
+    // Clients can compose SDR into PQ using the advertised preferred encoding.
+    // A declared SDR content peak must not trigger HDR just because of that
+    // encoding. Keep HDR mastering metadata and unknown peaks eligible.
+    return description.requiresHdrOutput
+        && (description.data.max_cll == 0
+            || static_cast<float>(description.data.max_cll) > description.luminances.reference
+            || (description.data.has_mastering_luminance
+                && description.data.mastering_luminance.max > description.luminances.reference));
+  }
+
   ColorDescription outputColorDescription(
       const wlr_output_image_description* outputDescription, float effectiveSdrWhite, bool automaticHdrAvailable
   ) {

@@ -208,6 +208,8 @@ While HDR is active, `sdr_white` sets the brightness of composed SDR content. It
 
 On a supported output, `hdr = "auto"` advertises an HDR encoding before the display switches to HDR. This lets native Wayland Wine and Proton detect HDR support before submitting their first HDR frame. The output remains in SDR until fullscreen content supplies HDR metadata. The advertised target color volume continues to describe the current SDR or HDR destination, and `umbriel color` reports the physical output's active state.
 
+An HDR encoding can carry SDR content. In automatic mode, a positive content peak (MaxCLL) at or below the surface's reference white keeps the output in SDR, unless the application also supplies HDR mastering luminance. This keeps SDR browser content from switching the monitor to HDR merely because the browser uses a PQ buffer. A zero or missing content peak remains unknown; Umbriel then uses the description's encoding and luminance headroom.
+
 HDR availability requires a successful backend test of an HDR output state. If activation fails, Umbriel withdraws the HDR encoding until an output configuration or mode change tests support again. Windowed HDR content and content whose activation fails receive highlight compression into SDR instead of clipping every bright highlight to white. Untagged SDR content keeps its normal rendering.
 
 On HDR outputs, untagged SDR windows and compositor colors use gamma 2.2 by default to preserve their legacy SDR appearance. Set `sdr_transfer = "srgb"` to decode them with the piecewise sRGB curve instead. This produces lighter dark shades and can match applications that convert SDR into PQ using that curve:
