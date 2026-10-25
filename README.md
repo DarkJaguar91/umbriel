@@ -2,10 +2,10 @@
 
 Umbriel is a Wayland compositor designed for daily use, with scrolling, dwindle, master, and floating layouts, per-output workspaces, window rules, blur, shadows, and fluid animations.
 
-It runs independently and can be paired with [Noctalia](https://github.com/noctalia-dev/noctalia), which provides a first-class desktop shell experience for Umbriel. Umbriel is built in C++23 on [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) and `umbrielfx`, its in-tree hard fork of [SceneFX](https://github.com/wlrfx/scenefx).
+It runs independently and pairs with [Noctalia](https://github.com/noctalia-dev/noctalia), which provides a first-class desktop shell on top. Under the hood: C++23, [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots), and `umbrielfx`, an in-tree hard fork of [SceneFX](https://github.com/wlrfx/scenefx).
 
 > [!IMPORTANT]
-> Umbriel is young and actively evolving. It is usable today, but configuration keys, keybinds, and behavior may change between releases, and rough edges remain. Current defaults are opinions, not stability promises.
+> The project is young and actively evolving. It is usable today, but configuration keys, keybinds, and behavior may change between releases, and rough edges remain. Current defaults are opinions, not stability promises.
 
 <p align="center">
   <img src="https://assets.noctalia.dev/?file=umbriel.svg" alt="Umbriel Logo" style="width: 192px" />
@@ -22,7 +22,7 @@ It runs independently and can be paired with [Noctalia](https://github.com/nocta
 
 ## Why Umbriel?
 
-There is no single killer feature: we were disappointed with the choices available, so we built the compositor we wanted to live in. That is how Noctalia came to life, and Umbriel is its compositor side.
+There is no single killer feature: we were disappointed with the choices available, so we built the compositor we wanted to live in. That is how Noctalia came to life, and this is its compositor side.
 
 We want one desktop for productivity and gaming: flexible layouts, tab groups, and scratchpads for organizing work, alongside HDR, variable refresh rate, and configurable fullscreen presentation for games.
 
