@@ -1082,7 +1082,7 @@ namespace umbriel {
       // (xdg_toplevel.move), such as a CSD title bar or Chromium tab strip.
       bool clientWindowDrag = true;
       // Preview and apply half or quarter placement while dragging to output edges.
-      bool windowSnapping = false;
+      bool windowSnapping = true;
       // Retarget an interactive window drag with the free mouse button: float
       // it, pin it, or leave the drag alone.
       WindowDragToggle windowDragToggle = WindowDragToggle::None;

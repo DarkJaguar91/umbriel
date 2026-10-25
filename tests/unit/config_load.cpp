@@ -4843,16 +4843,19 @@ layout.mode = "floating"
   CHECK(store.config().workspaceRules[0].layout.mode == LayoutMode::Floating);
 }
 
-UMBRIEL_TEST(windowSnappingIsAnOptInBoolean) {
+UMBRIEL_TEST(windowSnappingDefaultsOnAndRejectsNonBooleans) {
   const TempConfig file;
-  file.write("[input]\nwindow_snapping = true\n");
+  file.write("[input]\n");
   ConfigStore& store = umbriel::configStore();
   store.setRootPath(file.path(), true);
   CHECK(store.reload().success);
   CHECK(store.config().input.windowSnapping);
-  file.write("[input]\nwindow_snapping = 1\n");
+  file.write("[input]\nwindow_snapping = false\n");
   CHECK(store.reload().success);
   CHECK(!store.config().input.windowSnapping);
+  file.write("[input]\nwindow_snapping = 1\n");
+  CHECK(store.reload().success);
+  CHECK(store.config().input.windowSnapping);
   CHECK(containsDiagnostic(store, "input.window_snapping"));
 }
 

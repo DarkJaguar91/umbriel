@@ -128,7 +128,7 @@ radius = 3
 # https://docs.noctalia.dev/umbriel/input/
 #
 # [input]
-# window_snapping = false # Drag floating windows to edges or corners for snap previews.
+# window_snapping = false # Drop dragged floating windows where released instead of snapping to edges or corners.
 #
 [input.keyboard]
 numlock_toggle = true
