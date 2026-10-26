@@ -115,6 +115,25 @@ namespace umbriel {
     if (m_node->alpha != m_alpha) {
       wlr_scene_blur_set_alpha(m_node, m_alpha);
     }
+    wlr_scene_buffer* shapeSource = wlr_scene_blur_get_transparency_mask_source(m_node);
+    const pixman_region32_t* shape =
+        shapeSource != nullptr ? wlr_scene_node_get_clip_region(&shapeSource->node) : nullptr;
+    if (shape != nullptr) {
+      pixman_region32_t clip;
+      pixman_region32_init(&clip);
+      pixman_region32_copy(&clip, shape);
+      int sourceX = 0;
+      int sourceY = 0;
+      int blurX = 0;
+      int blurY = 0;
+      wlr_scene_node_coords(&shapeSource->node, &sourceX, &sourceY);
+      wlr_scene_node_coords(&m_node->node, &blurX, &blurY);
+      pixman_region32_translate(&clip, sourceX - blurX, sourceY - blurY);
+      wlr_scene_node_set_clip_region(&m_node->node, &clip);
+      pixman_region32_fini(&clip);
+    } else {
+      wlr_scene_node_set_clip_region(&m_node->node, nullptr);
+    }
   }
 
   void SurfaceBlur::setAlpha(float alpha) {

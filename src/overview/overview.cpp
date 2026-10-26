@@ -24,6 +24,7 @@ extern "C" {
 #include "scene/effect_registry.h"
 #include "scene/hint_rect.h"
 #include "scene/ssd_frame.h"
+#include "scene/surface_shape.h"
 #include "scene/text_buffer.h"
 #include "server/color_manager.h"
 #include "server/server.h"
@@ -41,6 +42,7 @@ extern "C" {
 // clang-format on
 #include "workspace/scratchpad.h"
 #include "workspace/workspace.h"
+#include "xwayland/xwayland.h"
 
 namespace umbriel {
 
@@ -411,6 +413,7 @@ namespace umbriel {
       const float surfaceOpacity =
           entry->sourceBuffer != nullptr ? entry->sourceBuffer->opacity * cardOpacity : cardOpacity;
       wlr_scene_buffer_set_opacity(entry->buffer, surfaceOpacity);
+      const pixman_region32_t* shape = entry->view->xwayland() ? m_server->xwayland()->surfaceShape(surface) : nullptr;
       if (!entry->isRoot) {
         wlr_box sub{
             card.box.x + static_cast<int>(std::lround((entry->sx - geometry.x) * fx)),
@@ -421,6 +424,7 @@ namespace umbriel {
         wlr_scene_node_set_enabled(&entry->buffer->node, true);
         wlr_scene_node_set_position(&entry->buffer->node, sub.x - card.box.x, sub.y - card.box.y);
         wlr_scene_buffer_set_dest_size(entry->buffer, sub.width, sub.height);
+        applySurfaceShape(entry->buffer, surface, shape);
         roundToCardBox(entry->buffer);
         continue;
       }
@@ -452,6 +456,7 @@ namespace umbriel {
       wlr_scene_node_set_position(&entry->buffer->node, 0, 0);
       wlr_scene_buffer_set_source_box(entry->buffer, &src);
       wlr_scene_buffer_set_dest_size(entry->buffer, contentW, contentH);
+      applySurfaceShape(entry->buffer, surface, shape);
       roundToCardBox(entry->buffer);
       const wlr_box blurBox{0, 0, contentW, contentH};
       card.blur.setAlpha(1.0F);
@@ -1261,6 +1266,7 @@ namespace umbriel {
       wlr_scene_buffer_set_corner_radii(copy, source->corners);
       wlr_scene_buffer_set_corner_box(copy, &source->corner_box);
       wlr_scene_buffer_set_opacity(copy, source->opacity);
+      wlr_scene_node_set_clip_region(&copy->node, wlr_scene_node_get_clip_region(&source->node));
       wlr_scene_buffer_copy_color(copy, source);
       if (ColorManager* colorManager = m_server->colorManager()) {
         colorManager->applySurfaceDescriptionToBuffer(entry->surface, copy);
