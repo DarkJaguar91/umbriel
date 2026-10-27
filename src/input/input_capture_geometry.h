@@ -11,6 +11,7 @@ namespace umbriel {
     int32_t y = 0;
     uint32_t width = 0;
     uint32_t height = 0;
+    double physicalScale = 1.0;
     bool operator==(const InputCaptureZone&) const = default;
   };
 

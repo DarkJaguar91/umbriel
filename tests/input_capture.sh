@@ -179,6 +179,13 @@ await_events "$CAPTURE_LOG" 'failed-barrier id=999' 1 "diagonal barrier rejectio
 send "barrier 1 $RIGHT $zone_y $RIGHT $BOTTOM" connect
 await_events "$CAPTURE_LOG" 'barriers failed=0' 1 "exterior barrier acceptance"
 await_events "$CAPTURE_LOG" ei-device-ready 2 "keyboard and pointer EI devices"
+send 'regions initial'
+await_events "$CAPTURE_LOG" 'ei-regions label=initial ' 1 "initial EI pointer geometry"
+if ! grep -Fq "ei-regions label=initial count=1 width=$zone_w height=$zone_h" "$CAPTURE_LOG"; then
+  echo "EI pointer regions do not describe the initial logical desktop"
+  cat "$CAPTURE_LOG"
+  exit 1
+fi
 
 physical 'at 400 300' 'tap 32'
 await_events "$LOCAL_LOG" 'keyboard-key code=32 state=pressed' 1 "local input before activation"
@@ -275,6 +282,15 @@ await_events "$RUNTIME/lock.log" unlocked 1 "unlocking the isolated session"
 
 "$UMBRIEL" output-create capture-hotplug 640x360 > /dev/null
 await_events "$CAPTURE_LOG" zones-changed 1 "output change invalidates capture zones"
+await_events "$CAPTURE_LOG" 'ei-pointer-removed id=1' 1 "old pointer geometry removed after hotplug"
+await_events "$CAPTURE_LOG" 'ei-pointer-resumed id=2' 1 "replacement pointer geometry ready after hotplug"
+send 'regions hotplug'
+await_events "$CAPTURE_LOG" 'ei-regions label=hotplug ' 1 "updated EI regions after hotplug"
+if ! grep -Fq "ei-regions label=hotplug count=2 width=$((zone_w + 640)) height=$zone_h" "$CAPTURE_LOG"; then
+  echo "EI pointer regions did not grow to include the new output"
+  cat "$CAPTURE_LOG"
+  exit 1
+fi
 send close
 await_events "$CAPTURE_LOG" ei-disconnected 1 "session close revokes EI transport"
 send quit
@@ -374,6 +390,115 @@ for capabilities in 1 2; do
   send quit
   wait "$capability_pid"
 done
+
+# EI regions describe the full logical desktop, including negative origins and
+# mixed scales. A local monitor seam stays local; exterior barriers hand input
+# to the application from every side of the multi-output layout.
+cat >> "$RUNTIME/config.toml" <<'CONFIG'
+[output.HEADLESS-1]
+mode = "640x360"
+position = [-640, 0]
+scale = 1
+[output.capture-hotplug]
+mode = "1280x720"
+position = [0, -180]
+scale = 2
+CONFIG
+"$UMBRIEL" msg config-reload > /dev/null
+"$UMBRIEL" settle > /dev/null
+readonly LAYOUT_LOG=$RUNTIME/layout.log
+"$PORTAL_BUILD/input-capture-test-client" <&"$CLIENT_FD" > "$LAYOUT_LOG" 2>&1 &
+layout_pid=$!
+PIDS+=("$layout_pid")
+await_events "$LAYOUT_LOG" ready 1 "multi-output capture session"
+send start
+wait_confirmation
+physical 'tap 28'
+await_events "$LAYOUT_LOG" 'started capabilities=3' 1 "multi-output capture consent"
+send zones connect
+await_events "$LAYOUT_LOG" 'zone x=' 2 "signed logical zones for both outputs"
+await_events "$LAYOUT_LOG" 'ei-pointer-resumed id=1' 1 "multi-output pointer ready"
+send 'regions layout'
+await_events "$LAYOUT_LOG" 'ei-regions label=layout ' 1 "multi-output EI region snapshot"
+for expected in \
+    'ei-regions label=layout count=2 width=1280 height=540' \
+    'ei-region label=layout x=0 y=180 width=640 height=360 scale=1.000' \
+    'ei-region label=layout x=640 y=0 width=640 height=360 scale=2.000'; do
+  if ! grep -Fq "$expected" "$LAYOUT_LOG"; then
+    echo "Missing EI layout metadata: $expected"
+    cat "$LAYOUT_LOG"
+    exit 1
+  fi
+done
+release_layout() {
+  local activation
+  activation=$(sed -n 's/^activated id=\([0-9]*\) .*/\1/p' "$LAYOUT_LOG" | tail -1)
+  send "release $activation 100 100"
+}
+
+send 'barrier 7 640 -180 640 179'
+await_events "$LAYOUT_LOG" 'barriers failed=0' 1 "right barrier on the second output"
+send enable
+await_events "$LAYOUT_LOG" 'requested enable' 1 "multi-output right barrier enabled"
+physical 'at -1 90' 'move 2 0'
+status_before=$(events "$RUNTIME/compositor.log" status)
+physical status
+await_events "$RUNTIME/compositor.log" status "$((status_before + 1))" "crossing a local monitor seam"
+assert_count "$LAYOUT_LOG" activated 0
+if ! grep '^status ' "$RUNTIME/compositor.log" | tail -1 | grep -q 'active=0 x=1.000 y=90.000'; then
+  echo "the local monitor seam did not retain normal pointer movement"
+  exit 1
+fi
+physical 'at 639 90' 'move 20 0'
+await_events "$LAYOUT_LOG" activated 1 "outer-right capture from the second output"
+physical 'move 7 3'
+await_events "$LAYOUT_LOG" 'ei-motion dx=7.000 dy=3.000' 1 "motion after the second output handoff"
+release_layout
+await_events "$LAYOUT_LOG" 'requested release' 1 "multi-output capture released"
+
+side=1
+for barrier in \
+    '8 -640 0 -640 359' \
+    '9 0 -180 639 -180' \
+    '10 -640 360 -1 360'; do
+  case $side in
+    1) approach='at -639 90'; cross='move -20 0' ;;
+    2) approach='at 100 -179'; cross='move 0 -20' ;;
+    3) approach='at -320 359'; cross='move 0 20' ;;
+  esac
+  send disable
+  await_events "$LAYOUT_LOG" 'requested disable' "$side" "disabling before replacing barrier $side"
+  send "barrier $barrier"
+  await_events "$LAYOUT_LOG" 'barriers failed=0' "$((side + 1))" "multi-output exterior barrier $side"
+  send enable
+  await_events "$LAYOUT_LOG" 'requested enable' "$((side + 1))" "multi-output exterior barrier enabled $side"
+  physical "$approach" "$cross"
+  await_events "$LAYOUT_LOG" activated "$((side + 1))" "multi-output exterior capture $side"
+  release_layout
+  await_events "$LAYOUT_LOG" 'requested release' "$((side + 1))" "multi-output exterior release $side"
+  side=$((side + 1))
+done
+
+# Changing physical resolution and scale together can preserve logical bounds.
+# The immutable EI device still needs replacement to publish its new scale.
+sed -i 's/mode = "1280x720"/mode = "640x360"/; s/^scale = 2$/scale = 1/' "$RUNTIME/config.toml"
+"$UMBRIEL" msg config-reload > /dev/null
+"$UMBRIEL" settle > /dev/null
+await_events "$LAYOUT_LOG" 'ei-pointer-removed id=1' 1 "pointer removed after a scale-only layout change"
+await_events "$LAYOUT_LOG" 'ei-pointer-resumed id=2' 1 "pointer replaced after a scale-only layout change"
+send 'regions rescaled'
+await_events "$LAYOUT_LOG" 'ei-regions label=rescaled ' 1 "rescaled EI region snapshot"
+for expected in \
+    'ei-regions label=rescaled count=2 width=1280 height=540' \
+    'ei-region label=rescaled x=640 y=0 width=640 height=360 scale=1.000'; do
+  if ! grep -Fq "$expected" "$LAYOUT_LOG"; then
+    echo "EI scale change altered logical bounds or retained old metadata: $expected"
+    cat "$LAYOUT_LOG"
+    exit 1
+  fi
+done
+send close quit
+wait "$layout_pid"
 
 # Touch is neither advertised nor silently substituted with keyboard/pointer.
 readonly TOUCH_LOG=$RUNTIME/touch.log

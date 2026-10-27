@@ -209,24 +209,56 @@ namespace umbriel {
       }
 
       void createPointer() {
-        if (seat == nullptr || !pointerBound) {
+        if (seat == nullptr || !pointerBound || pointer != nullptr || owner.zones.empty()) {
           return;
         }
-        pointer = eis_seat_new_device(seat);
-        if (pointer == nullptr) {
+        eis_device* device = eis_seat_new_device(seat);
+        if (device == nullptr) {
           return;
         }
-        eis_device_configure_type(pointer, EIS_DEVICE_TYPE_VIRTUAL);
-        eis_device_configure_name(pointer, "Umbriel captured pointer");
-        eis_device_configure_capability(pointer, EIS_DEVICE_CAP_POINTER);
+        eis_device_configure_type(device, EIS_DEVICE_TYPE_VIRTUAL);
+        eis_device_configure_name(device, "Umbriel captured pointer");
+        eis_device_configure_capability(device, EIS_DEVICE_CAP_POINTER);
         if (buttonsBound) {
-          eis_device_configure_capability(pointer, EIS_DEVICE_CAP_BUTTON);
+          eis_device_configure_capability(device, EIS_DEVICE_CAP_BUTTON);
         }
         if (scrollBound) {
-          eis_device_configure_capability(pointer, EIS_DEVICE_CAP_SCROLL);
+          eis_device_configure_capability(device, EIS_DEVICE_CAP_SCROLL);
         }
-        eis_device_add(pointer);
-        eis_device_resume(pointer);
+        // EI regions describe relative pointer geometry too. Their offsets are
+        // unsigned, so preserve the logical layout in a separate desktop origin.
+        int32_t minimumX = owner.zones.front().x;
+        int32_t minimumY = owner.zones.front().y;
+        for (const auto& zone : owner.zones) {
+          minimumX = std::min(minimumX, zone.x);
+          minimumY = std::min(minimumY, zone.y);
+        }
+        for (const auto& zone : owner.zones) {
+          const uint64_t x = static_cast<int64_t>(zone.x) - minimumX;
+          const uint64_t y = static_cast<int64_t>(zone.y) - minimumY;
+          constexpr uint32_t maximum = std::numeric_limits<uint32_t>::max();
+          if (x > maximum - zone.width || y > maximum - zone.height) {
+            kLog.error("input capture layout exceeds EI region coordinates");
+            eis_device_remove(device);
+            eis_device_unref(device);
+            return;
+          }
+          eis_region* region = eis_device_new_region(device);
+          if (region == nullptr) {
+            kLog.error("failed to allocate an input capture EI region");
+            eis_device_remove(device);
+            eis_device_unref(device);
+            return;
+          }
+          eis_region_set_offset(region, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
+          eis_region_set_size(region, zone.width, zone.height);
+          eis_region_set_physical_scale(region, zone.physicalScale);
+          eis_region_add(region);
+          eis_region_unref(region);
+        }
+        eis_device_add(device);
+        eis_device_resume(device);
+        pointer = device;
       }
 
       [[nodiscard]] bool ready() const {
@@ -703,13 +735,14 @@ namespace umbriel {
             {.x = box.x,
              .y = box.y,
              .width = static_cast<uint32_t>(box.width),
-             .height = static_cast<uint32_t>(box.height)}
+             .height = static_cast<uint32_t>(box.height),
+             .physicalScale = output->wlr()->scale}
         );
       }
     }
     std::ranges::sort(zones, [](const auto& first, const auto& second) {
-      return std::tie(first.x, first.y, first.width, first.height)
-          < std::tie(second.x, second.y, second.width, second.height);
+      return std::tie(first.x, first.y, first.width, first.height, first.physicalScale)
+          < std::tie(second.x, second.y, second.width, second.height, second.physicalScale);
     });
     if (zones == m_impl->zones) {
       return;
@@ -722,6 +755,10 @@ namespace umbriel {
     for (const auto& state : m_impl->sessions) {
       state->disable(true);
       state->barriers.clear();
+      // Regions are immutable after device publication. Reannounce the pointer
+      // so EI clients replace their desktop bounds when the outputs change.
+      state->clearPointer();
+      state->createPointer();
       if (state->approved && !state->closed) {
         umbriel_input_capture_session_v1_send_zones_changed(state->resource, invalidated);
       }

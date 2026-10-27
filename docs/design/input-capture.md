@@ -32,6 +32,8 @@ Activation clears local focus and transfers eligible held keys. Deactivation rel
 
 All zone rectangles use logical coordinates from the desktop output layout, including negative positions. Xwayland's transformed output coordinates are not used. Barrier validation rejects shared interior edges, diagonal lines, invalid IDs, and segments extending beyond their containing zone.
 
+The relative EI pointer publishes one logical region per enabled output, with that output's physical scale. EI region offsets are unsigned, so their origin is translated to the layout's minimum x and y while portal zones and activation/release positions retain their signed layout coordinates. This preserves monitor sizes, gaps, and mixed scales without adding absolute pointer capabilities. Output layout or scale changes replace the pointer device because its regions are immutable after publication.
+
 ## Dependencies and verification
 
 Umbriel retains its existing `libeis-1.0 >= 1.3` requirement. The capture implementation compiles against the 1.3 header. The portal daemon adds no runtime library dependency; its integration client uses test-only `libei-1.0 >= 1.3` alongside its existing sdbus-c++ dependency.
@@ -40,7 +42,7 @@ The integration runner also requires `dbus-daemon` and `dbus-send` from the `dbu
 
 `tests/unit/input_capture_geometry.cpp` covers logical coordinates, shared and exposed edges, inclusive pixel endpoints, single-pixel corners, unclipped crossings, and one-event motion across outputs. Mutation checks remove or reverse those rules and must fail the corresponding assertions.
 
-`tests/input_capture.sh` starts a private D-Bus, the actual portal backend and frontend, an EI receiver, a local Wayland observer, and a real Umbriel Server with backend-boundary keyboard and pointer devices. It verifies physical approval and virtual-keyboard rejection, asynchronous activation, event routing, held-state cleanup, stale releases, connection reuse, emergency escape, absolute deltas, lock-screen exclusion, monitor changes, and session teardown. It does not use the host's input devices, compositor, or session services.
+`tests/input_capture.sh` starts a private D-Bus, the actual portal backend and frontend, an EI receiver, a local Wayland observer, and a real Umbriel Server with backend-boundary keyboard and pointer devices. It verifies physical approval and virtual-keyboard rejection, asynchronous activation, event routing, held-state cleanup, stale releases, connection reuse, emergency escape, absolute deltas, lock-screen exclusion, monitor changes, and session teardown. It also checks EI region geometry, pointer replacement after hotplug, negative output positions, mixed scales, local monitor crossings, and capture on all four exterior sides. It does not use the host's input devices, compositor, or session services.
 
 Run it after building both repositories, passing the portal frontend executable when it is outside `PATH`:
 
