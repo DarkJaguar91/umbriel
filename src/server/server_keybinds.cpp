@@ -1,5 +1,6 @@
 #include "config/config.h"
 #include "input/cursor.h"
+#include "input/input_capture.h"
 #include "input/keyboard.h"
 #include "input/seat.h"
 #include "input/text_input.h"
@@ -60,6 +61,9 @@ namespace umbriel {
       return false;
     }
 
+    if (m_inputCapture != nullptr) {
+      m_inputCapture->suspend();
+    }
     if (!wlr_session_change_vt(m_session, vt)) {
       wlr_log(WLR_ERROR, "failed to switch to VT %u", vt);
     }
@@ -313,7 +317,10 @@ namespace umbriel {
     return nullptr;
   }
 
-  uint32_t Server::keyboardModifiers() const {
+  uint32_t Server::keyboardModifiers(bool includeCaptured) const {
+    if (!includeCaptured && m_inputCapture != nullptr && (m_inputCapture->capabilities() & 1U) != 0) {
+      return 0;
+    }
     uint32_t modifiers = 0;
     for (const auto& keyboard : m_keyboards) {
       if (keyboard == nullptr

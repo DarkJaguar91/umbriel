@@ -129,6 +129,7 @@ namespace umbriel {
 
   class Cursor;
   class EisInput;
+  class InputCapture;
   class BackendManager;
   class FocusManager;
   class Xwayland;
@@ -179,6 +180,9 @@ namespace umbriel {
     // Null when general.xwayland is off or the Xwayland server could not be created.
     [[nodiscard]] Xwayland* xwayland() const { return m_xwayland.get(); }
     [[nodiscard]] EisInput* eisInput() const { return m_eisInput.get(); }
+    [[nodiscard]] InputCapture* inputCapture() const { return m_inputCapture.get(); }
+    [[nodiscard]] bool physicalInputDevice(const wlr_input_device* device) const;
+    [[nodiscard]] bool keyboardKeyConsumed(wlr_keyboard* keyboard, uint32_t keycode) const;
     [[nodiscard]] wlr_backend* backend() const { return m_backend; }
     [[nodiscard]] wlr_session* session() const { return m_session; }
     [[nodiscard]] wlr_renderer* renderer() const { return m_renderer; }
@@ -281,6 +285,7 @@ namespace umbriel {
     void stopFollowingScreenCast();
     void confirmScreenCastDynamic();
     void confirmInputEmulation();
+    void confirmInputCapture();
     void dismissConfirmation();
     // Owners register themselves for the frame tick. The registry is kept in phase order, so the three traversals above
     // never re-state which owners exist or in what order they run.
@@ -412,7 +417,7 @@ namespace umbriel {
     // Combined state across independent keyboard devices. Media and brightness
     // keys commonly come from a device separate from held modifiers. An input
     // method's mirrored keyboard is not independent and is excluded.
-    [[nodiscard]] uint32_t keyboardModifiers() const;
+    [[nodiscard]] uint32_t keyboardModifiers(bool includeCaptured = false) const;
     [[nodiscard]] bool keyboardShortcutsInhibited() const;
     bool toggleKeyboardShortcutsInhibit();
     // Reconcile existing client inhibitors after a window's rule or the user's override changes.
@@ -518,6 +523,10 @@ namespace umbriel {
     friend class EisInput;
     void requestInputEmulation(uint64_t id, std::string_view name);
     void cancelInputEmulation(uint64_t id);
+    void requestInputCapture(uint64_t id, std::string_view name);
+    void cancelInputCapture(uint64_t id);
+    void inputCaptureStateChanged(bool active);
+    static void onSessionActive(wl_listener* listener, void* data);
     friend class Output;
 
     bool requestScreenCastCommand(ScreenCastCommandKind kind, std::string value, std::string* error);
@@ -718,6 +727,7 @@ namespace umbriel {
     std::unique_ptr<BackendManager> m_backendManager;
     wlr_backend* m_backend = nullptr;
     wlr_session* m_session = nullptr;
+    wl_listener m_sessionActive{};
     wlr_renderer* m_renderer = nullptr;
     wlr_allocator* m_allocator = nullptr;
     wlr_compositor* m_compositor = nullptr;
@@ -924,6 +934,9 @@ namespace umbriel {
 
     std::unique_ptr<Xwayland> m_xwayland;
     std::unique_ptr<EisInput> m_eisInput;
+    std::unique_ptr<InputCapture> m_inputCapture;
+    uint64_t m_pendingCaptureId = 0;
+    uint32_t m_inputCaptureCapabilities = 0;
     uint64_t m_pendingInputId = 0;
     std::string m_pendingInputName;
     std::unordered_set<std::string> m_allowedInputNames;

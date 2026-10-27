@@ -4,6 +4,7 @@
 #include "core/log.h"
 #include "input/cursor.h"
 #include "input/eis.h"
+#include "input/input_capture.h"
 #include "input/keyboard_layout.h"
 #include "input/keyboard_state.h"
 #include "input/seat.h"
@@ -230,7 +231,36 @@ namespace umbriel {
     self->handleDestroy();
   }
 
+  void Keyboard::prepareInputCapture(bool ending) {
+    cancelRepeat();
+    if (ending) {
+      for (size_t index = 0; index < m_keyboard->num_keycodes; ++index) {
+        m_consumedKeycodes.insert(m_keyboard->keycodes[index]);
+      }
+      return;
+    }
+    if (wlr_input_method_keyboard_grab_v2* grab = activeInputMethodGrab(); grab != nullptr) {
+      for (size_t index = 0; index < m_keyboard->num_keycodes; ++index) {
+        const uint32_t keycode = m_keyboard->keycodes[index];
+        if (!m_consumedKeycodes.contains(keycode)) {
+          wlr_input_method_keyboard_grab_v2_send_key(grab, 0, keycode, WL_KEYBOARD_KEY_STATE_RELEASED);
+        }
+      }
+      wlr_keyboard_modifiers neutral{};
+      wlr_input_method_keyboard_grab_v2_send_modifiers(grab, &neutral);
+    }
+  }
+
   void Keyboard::handleModifiers() {
+    if (InputCapture* capture = m_server->inputCapture(); capture != nullptr && (capture->capabilities() & 1U) != 0) {
+      if (!m_syncingLayout && !m_server->syncingKeyboardLocks() && !m_virtual) {
+        m_server->rememberKeyboardInputSource(*this);
+      }
+      if (!m_virtual) {
+        capture->captureModifiers(m_keyboard);
+      }
+      return;
+    }
     wlr_seat* seat = m_server->seat()->wlr();
     if (m_syncingLayout || m_server->syncingKeyboardLocks()) {
       m_server->refreshKeyboardLeds();
@@ -274,6 +304,15 @@ namespace umbriel {
 
   void Keyboard::handleKey(void* data) {
     auto* event = static_cast<wlr_keyboard_key_event*>(data);
+    if (InputCapture* capture = m_server->inputCapture();
+        capture != nullptr && (capture->capabilities() & 1U) != 0 && m_virtual) {
+      if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+        m_consumedKeycodes.insert(event->keycode);
+      } else {
+        m_consumedKeycodes.erase(event->keycode);
+      }
+      return;
+    }
     m_server->rememberKeyboardInputSource(*this);
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
       m_server->notifyInputActivity();
@@ -294,7 +333,47 @@ namespace umbriel {
     std::optional<Keybind> modifierTap;
     // An XF86 key can arrive from a dedicated hotkey device while its modifiers are held on the main keyboard. Match
     // against the combined seat-wide state so those chords behave like keys on one device.
-    uint32_t modifiers = m_server->keyboardModifiers();
+    uint32_t modifiers = m_server->keyboardModifiers(true);
+    if (QuitConfirm* confirm = m_server->quitConfirm();
+        confirm != nullptr && confirm->visible() && confirm->kind() == QuitConfirm::Kind::InputCapture && m_virtual) {
+      if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+        m_consumedKeycodes.insert(event->keycode);
+      } else {
+        m_consumedKeycodes.erase(event->keycode);
+      }
+      return;
+    }
+    if (InputCapture* capture = m_server->inputCapture(); capture != nullptr && capture->active()) {
+      cancelRepeat();
+      const bool pressed = event->state == WL_KEYBOARD_KEY_STATE_PRESSED;
+      if (!m_virtual && pressed) {
+        const bool escape =
+            (modifiers & (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)) == (WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT)
+            && std::ranges::any_of(std::span(syms, nsyms > 0 ? static_cast<size_t>(nsyms) : 0), [](xkb_keysym_t sym) {
+                 return sym == XKB_KEY_Escape;
+               });
+        bool vt = false;
+        for (int index = 0; index < nsyms && !escape; ++index) {
+          vt = m_server->handleVtSwitch(syms[index], modifiers) || vt;
+        }
+        if (escape || vt) {
+          capture->suspend();
+          m_consumedKeycodes.insert(event->keycode);
+          return;
+        }
+      }
+      if ((capture->capabilities() & 1U) != 0) {
+        if (pressed) {
+          m_consumedKeycodes.insert(event->keycode);
+        } else {
+          m_consumedKeycodes.erase(event->keycode);
+        }
+        if (!m_virtual) {
+          capture->captureKey(event->time_msec, m_keyboard, event->keycode, pressed);
+        }
+        return;
+      }
+    }
     if (event->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
       if (!modifierOnly && nsyms > 0) {
         m_server->cursor()->noteTyping();
@@ -345,6 +424,8 @@ namespace umbriel {
               m_server->requestSessionExit();
             } else if (confirm->kind() == QuitConfirm::Kind::InputEmulation) {
               m_server->confirmInputEmulation();
+            } else if (confirm->kind() == QuitConfirm::Kind::InputCapture) {
+              m_server->confirmInputCapture();
             } else {
               m_server->confirmScreenCastDynamic();
             }

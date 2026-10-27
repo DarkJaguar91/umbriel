@@ -6,6 +6,7 @@
 #include "input/cursor.h"
 #include "input/eis.h"
 #include "input/gestures.h"
+#include "input/input_capture.h"
 #include "input/keyboard.h"
 #include "input/keyboard_leds.h"
 #include "input/seat.h"
@@ -932,6 +933,9 @@ namespace umbriel {
     m_surfaceLayouts.clear();
     for (const auto& keyboard : m_keyboards) {
       keyboard->applyConfig();
+      if (m_inputCapture != nullptr && !keyboard->virtualDevice()) {
+        m_inputCapture->updateKeymap(keyboard->wlr());
+      }
       // A rebuilt keymap can gain locks absent from its predecessor. Reapply
       // shared state after the per-device restoration has finished.
       refreshKeyboardLeds();
@@ -1541,6 +1545,12 @@ namespace umbriel {
     PointerDevice* watch;
     watch = wl_container_of(listener, watch, destroy);
     Server* server = watch->server;
+    if (server->m_inputCapture != nullptr) {
+      server->m_inputCapture->forgetAbsoluteDevice(watch->device);
+      if ((server->m_inputCapture->capabilities() & 2U) != 0) {
+        server->m_inputCapture->suspend();
+      }
+    }
     wl_list_remove(&watch->destroy.link);
     std::erase_if(server->m_pointers, [watch](const std::unique_ptr<PointerDevice>& pointer) {
       return pointer.get() == watch;
@@ -1949,6 +1959,12 @@ namespace umbriel {
   }
 
   void Server::beginSessionLock(wlr_session_lock_v1* lock) {
+    if (m_inputCapture != nullptr) {
+      m_inputCapture->suspend();
+    }
+    if (m_pendingCaptureId != 0) {
+      dismissConfirmation();
+    }
     if (m_sessionLock != nullptr) {
       kLog.info("denying session lock; one is already active");
       wlr_session_lock_v1_destroy(lock);
@@ -1975,6 +1991,9 @@ namespace umbriel {
       }
 
       dismissConfirmation();
+      if (m_inputCapture != nullptr) {
+        m_inputCapture->suspend();
+      }
       if (m_eisInput != nullptr) {
         m_eisInput->setSessionLocked(true);
       }
@@ -2114,6 +2133,9 @@ namespace umbriel {
       wlr_seat_set_keyboard(seat, keyboard->wlr());
     }
     m_keyboardLeds->add(keyboard->wlr(), keyboard->virtualDevice(), config().input.keyboard.numlockToggle);
+    if (m_inputCapture != nullptr && !keyboard->virtualDevice()) {
+      m_inputCapture->addKeyboard(keyboard->wlr());
+    }
   }
 
   bool Server::cycleKeyboardLayout() {
@@ -3533,6 +3555,9 @@ namespace umbriel {
   }
 
   void Server::notifyKeyboardEnter(wlr_surface* surface, KeyboardGrab grab) {
+    if (m_inputCapture != nullptr && (m_inputCapture->capabilities() & 1U) != 0) {
+      return;
+    }
     wlr_seat* seat = m_seat->wlr();
     wlr_surface* previous = seat->keyboard_state.focused_surface;
     const bool leavesXwayland = m_xwayland != nullptr
@@ -3650,6 +3675,9 @@ namespace umbriel {
   }
 
   void Server::removeKeyboard(Keyboard* keyboard) {
+    if (m_inputCapture != nullptr) {
+      m_inputCapture->removeKeyboard(keyboard->wlr());
+    }
     wlr_seat* seat = m_seat->wlr();
     const bool seatKeyboardRemoved = wlr_seat_get_keyboard(seat) == keyboard->wlr();
     const bool sourceRemoved = m_keyboardLayoutSource == keyboard;
@@ -3764,11 +3792,17 @@ namespace umbriel {
     if (self->m_eisInput != nullptr) {
       self->m_eisInput->updateOutputs();
     }
+    if (self->m_inputCapture != nullptr) {
+      self->m_inputCapture->updateOutputs();
+    }
   }
 
   void Server::updateOutputManagerConfig() {
     // Every output state change that output management publishes also changes the IPC output listing.
     scheduleIpcOutputsEvent();
+    if (m_inputCapture != nullptr && !m_deferOutputManagerConfig) {
+      m_inputCapture->updateOutputs();
+    }
     if (m_outputManager == nullptr || m_deferOutputManagerConfig) {
       return;
     }

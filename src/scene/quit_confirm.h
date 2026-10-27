@@ -18,6 +18,7 @@ namespace umbriel {
       SessionQuit,
       ScreenCastDynamic,
       InputEmulation,
+      InputCapture,
     };
 
     QuitConfirm(Server& server, wlr_scene_tree* parent);
@@ -28,6 +29,7 @@ namespace umbriel {
 
     void show(Kind kind);
     void showInputEmulation(std::string_view application);
+    void showInputCapture(std::string_view application);
     void hide();
     [[nodiscard]] bool visible() const { return m_tree != nullptr; }
     [[nodiscard]] Kind kind() const { return m_kind; }

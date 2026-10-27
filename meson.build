@@ -146,6 +146,25 @@ add_project_arguments(
 
 wayland_scanner = find_program('wayland-scanner')
 
+input_capture_server_h = custom_target(
+  'umbriel-input-capture-v1-server-protocol.h',
+  input: 'protocols/umbriel-input-capture-v1.xml',
+  output: 'umbriel-input-capture-v1-server-protocol.h',
+  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+input_capture_client_h = custom_target(
+  'umbriel-input-capture-v1-client-protocol.h',
+  input: 'protocols/umbriel-input-capture-v1.xml',
+  output: 'umbriel-input-capture-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+input_capture_protocol_c = custom_target(
+  'umbriel-input-capture-v1-protocol.c',
+  input: 'protocols/umbriel-input-capture-v1.xml',
+  output: 'umbriel-input-capture-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 # umbrielfx's vendored layer-shell scene helper needs this server header, so it
 # is generated before the subdir that consumes it.
 layer_shell_protocol_h = custom_target(
@@ -685,6 +704,7 @@ pure_sources = files(
   'src/input/keyboard_layout.cpp',
   'src/input/keyboard_leds.cpp',
   'src/input/keyboard_state.cpp',
+  'src/input/input_capture_geometry.cpp',
   'src/input/surface_layouts.cpp',
   'src/input/shortcuts_inhibit.cpp',
   'src/input/shortcut_keysym.cpp',
@@ -795,6 +815,7 @@ core_sources = files(
   'src/xwayland/xwayland.cpp',
   'src/xwayland/shape.cpp',
   'src/input/eis.cpp',
+  'src/input/input_capture.cpp',
   'src/input/eis_socket.cpp',
   'src/xwayland/window.cpp',
   'src/xwayland/unmanaged.cpp',
@@ -864,6 +885,8 @@ umbriel_core_deps = [
 umbriel_core = static_library(
   'umbriel-core',
   core_sources + [
+    input_capture_server_h,
+    input_capture_protocol_c,
     toplevel_drag_server_h,
     toplevel_drag_c,
     xdg_shell_client_c,

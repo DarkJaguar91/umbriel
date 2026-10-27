@@ -24,6 +24,7 @@ unit_tests = [
   ['keyboard-layout', ['unit/keyboard_layout.cpp'], []],
   ['keyboard-leds', ['unit/keyboard_leds.cpp'], [wayland_server_dep]],
   ['keyboard-state', ['unit/keyboard_state.cpp'], [wayland_server_dep]],
+  ['input-capture-geometry', ['unit/input_capture_geometry.cpp'], []],
   ['eis-socket', ['unit/eis_socket.cpp'], [umbriel_core_dep, wayland_server_dep]],
   ['surface-layouts', ['unit/surface_layouts.cpp'], []],
   ['shortcuts-inhibit', ['unit/shortcuts_inhibit.cpp'], []],
@@ -487,7 +488,21 @@ capture_client = executable(
   dependencies: [wayland_client_dep],
 )
 
+# Uses real backend devices in an isolated compositor to verify physical consent.
+input_capture_compositor = executable(
+  'input-capture-compositor',
+  ['harness/clients/input_capture_compositor.cpp'],
+  dependencies: [umbriel_core_dep],
+)
+input_capture_client = executable(
+  'input-capture-client',
+  ['harness/clients/input_capture_client.cpp', input_capture_client_h, input_capture_protocol_c],
+  dependencies: [wayland_client_dep, dependency('libei-1.0', version: '>=1.3')],
+)
+
 harness_client_targets = [
+  input_capture_compositor,
+  input_capture_client,
   color_feedback_client,
   pixel_probe,
   capture_client,

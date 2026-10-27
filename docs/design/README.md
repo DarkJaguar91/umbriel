@@ -17,6 +17,7 @@ Start with the user guide when a detail affects configuration or normal use. Use
 - [Automatic HDR color feedback](automatic-hdr.md)
 - [Xwayland input stability](xwayland-input-stability.md)
 - [Xwayland input emulation](input-emulation.md)
+- [Portal input capture](input-capture.md)
 - [Client buffer constraints](client-buffer-constraints.md)
 - [Scene helper ownership](scene-helper-ownership.md)
 - [DRM GPU exclusion](drm-device-policy.md)

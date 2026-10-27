@@ -89,12 +89,12 @@ The canonical dependency declarations are in [`meson.build`](meson.build). Distr
 
 ### Runtime dependencies
 
-| Dependency                                 | Role                                                                        |
-| ------------------------------------------ | --------------------------------------------------------------------------- |
-| `Xwayland`                                 | X11 application support when `general.xwayland` is enabled                  |
-| `xdg-desktop-portal-umbriel`               | Screencast and Screenshot portal interfaces for portal-based screen capture |
-| A usable font stack                        | Internal overlays and configuration diagnostics                             |
-| A Wayland-capable graphics and input stack | DRM or nested compositor operation through wlroots                          |
+| Dependency                                 | Role                                                       |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| `Xwayland`                                 | X11 application support when `general.xwayland` is enabled |
+| `xdg-desktop-portal-umbriel`               | ScreenCast, Screenshot, and InputCapture portal backend    |
+| A usable font stack                        | Internal overlays and configuration diagnostics            |
+| A Wayland-capable graphics and input stack | DRM or nested compositor operation through wlroots         |
 
 `Xwayland` must be discoverable on `PATH`. It may be omitted when a package or installation deliberately disables Xwayland in the configuration.
 
