@@ -38,6 +38,10 @@ GLint fx_resolve_internal_format(const struct fx_renderer* renderer, const struc
 
 GLuint fx_framebuffer_get_fbo(struct fx_framebuffer* buffer);
 
+// Creates or refreshes the sampling view in the current context. Keeps the
+// active texture unit and unbinds the target after importing its EGLImage.
+GLuint fx_framebuffer_get_texture(struct fx_framebuffer* buffer);
+
 /**
  * Attaches a stencil renderbuffer to the framebuffer on first use. Leaves the
  * framebuffer bound. Returns false when no stencil could be attached.
