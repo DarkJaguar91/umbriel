@@ -402,6 +402,13 @@ xwayland_focus_client = executable(
   dependencies: [xcb_dep],
 )
 
+# An idle X11 client for controlled first-buffer and association ordering.
+xwayland_association_client = executable(
+  'xwayland-association-client',
+  ['harness/clients/xwayland_association_client.cpp'],
+  dependencies: [xcb_dep],
+)
+
 xwayland_input_client = executable(
   'xwayland-input-client',
   ['harness/clients/xwayland_input_client.cpp'],
@@ -527,6 +534,7 @@ harness_client_targets = [
   security_context_client,
   seat_log_client,
   xwayland_focus_client,
+  xwayland_association_client,
   xwayland_input_client,
   ei_peer_client,
   xwayland_selection_client,

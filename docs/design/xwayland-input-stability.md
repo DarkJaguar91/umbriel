@@ -2,6 +2,14 @@
 
 Umbriel supports X11 clients through wlroots' Xwayland server: managed X11 windows are views, and the compositor tells the X server where each one sits on screen. X11 games are sensitive to compositor-side geometry churn, and several Umbriel invariants exist to keep it away from them. Breaking any of these reintroduces a bug class where an X11 game's mouse input dies in part of the screen while everything looks correct.
 
+## Association catches up with the first buffer
+
+Xwayland sends window association messages over the X11 connection and surface commits over its Wayland connection. The first committed buffer can therefore arrive before the XWM associates that surface with its X11 window. wlroots installs its mapping commit listener during association, so it can miss that first buffer and leave the surface unmapped. An idle application can then wait indefinitely for a frame callback from a surface that never entered the scene. The X window remains viewable and in the stacking list while `_NET_CLIENT_LIST` and Umbriel's window list omit it.
+
+`XwaylandWindow::handleAssociate` creates the managed or unmanaged wrapper and installs its listeners before checking the currently associated surface. If that surface has a committed buffer and is still unmapped, it calls `wlr_surface_map` immediately. This delivers the same map signal to wlroots and Umbriel that a later buffer commit would deliver, including the client-list update. Pending buffers are left to the normal commit path, and an already mapped surface receives no duplicate map signal. Dissociation still unmaps and destroys the wrapper before another association is handled.
+
+`protocol/xwayland_association` exercises real Xwayland with an idle X11 client and a proxy on its private XWM connection. The proxy holds the selected association message while Wayland traffic continues. The check waits for the first buffer import, releases association, and requires the existing buffer to map without a redraw. It also checks ordinary ordering, managed window withdrawal and remapping, and rendered pixels from a delayed unmanaged window. Removing the catch-up must fail the delayed mapping transition.
+
 ## Bounding shapes constrain scene coverage
 
 An X11 bounding shape can contain holes or disconnected rectangles. Xwayland exports the window's rectangular backing buffer without applying that mask to its alpha. Pixels outside the shape can therefore be opaque black, even for an ARGB window with a transparent background. Reading the window with XGetImage does not establish backing-buffer alpha: Xwayland can zero the returned pixels outside its visible region.

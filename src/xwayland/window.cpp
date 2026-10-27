@@ -1,5 +1,6 @@
 #include "xwayland/window.h"
 
+#include "core/log.h"
 #include "server/server.h"
 #include "view/view.h"
 #include "wlr.h"
@@ -12,6 +13,8 @@
 namespace umbriel {
 
   namespace {
+
+    constexpr Logger kLog("xwayland");
 
     // The window types of menus, tooltips, dropdowns, and drag icons. A client may leave such a window to the window
     // manager instead of making it override-redirect, yet it still places the window itself, next to what opened it.
@@ -96,7 +99,15 @@ namespace umbriel {
   void XwaylandWindow::handleAssociate() {
     createWrapper();
     // Added after the wrapper's own unmap listener, so a view snapshots its close animation before a swap.
-    wl_signal_add(&m_xsurface->surface->events.unmap, &m_surfaceUnmap);
+    wlr_surface* surface = m_xsurface->surface;
+    wl_signal_add(&surface->events.unmap, &m_surfaceUnmap);
+    // X11 association and Wayland commits travel over separate sockets. If the first buffer arrived already,
+    // wlroots' newly installed commit listener missed it. Map it after all wrappers are ready so an idle client
+    // cannot wait forever for a frame callback from an unmapped surface.
+    if (!surface->mapped && wlr_surface_has_buffer(surface)) {
+      kLog.debug("mapping buffered X11 window={} on association", m_xsurface->window_id);
+      wlr_surface_map(surface);
+    }
   }
 
   void XwaylandWindow::handleDissociate() {
