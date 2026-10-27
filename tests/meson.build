@@ -23,6 +23,7 @@ unit_tests = [
   ['modifier-tap', ['unit/modifier_tap.cpp'], []],
   ['keyboard-layout', ['unit/keyboard_layout.cpp'], []],
   ['keyboard-leds', ['unit/keyboard_leds.cpp'], [wayland_server_dep]],
+  ['keyboard-state', ['unit/keyboard_state.cpp'], [wayland_server_dep]],
   ['eis-socket', ['unit/eis_socket.cpp'], [umbriel_core_dep, wayland_server_dep]],
   ['surface-layouts', ['unit/surface_layouts.cpp'], []],
   ['shortcuts-inhibit', ['unit/shortcuts_inhibit.cpp'], []],

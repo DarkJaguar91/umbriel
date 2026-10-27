@@ -468,6 +468,7 @@ namespace umbriel {
     void scheduleDisplacedViewRestore();
     void rememberKeyboardInputSource(Keyboard& keyboard);
     void refreshKeyboardLeds();
+    [[nodiscard]] bool syncingKeyboardLocks() const;
     void removeKeyboard(Keyboard* keyboard);
     void removeView(View* view);
     void removeLayerSurface(LayerSurface* layerSurface, wlr_output* output);

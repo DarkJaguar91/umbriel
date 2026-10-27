@@ -932,6 +932,9 @@ namespace umbriel {
     m_surfaceLayouts.clear();
     for (const auto& keyboard : m_keyboards) {
       keyboard->applyConfig();
+      // A rebuilt keymap can gain locks absent from its predecessor. Reapply
+      // shared state after the per-device restoration has finished.
+      refreshKeyboardLeds();
     }
     if (m_eisInput != nullptr) {
       m_eisInput->applyConfig();
@@ -2110,7 +2113,7 @@ namespace umbriel {
     if (!seatHasKeyboard && keyboard->wlr()->keymap != nullptr) {
       wlr_seat_set_keyboard(seat, keyboard->wlr());
     }
-    m_keyboardLeds->add(keyboard->wlr(), keyboard->virtualDevice());
+    m_keyboardLeds->add(keyboard->wlr(), keyboard->virtualDevice(), config().input.keyboard.numlockToggle);
   }
 
   bool Server::cycleKeyboardLayout() {
@@ -3632,13 +3635,13 @@ namespace umbriel {
   void Server::rememberKeyboardInputSource(Keyboard& keyboard) {
     if (m_inputMethodRelay == nullptr || !m_inputMethodRelay->ownsKeyboard(keyboard.wlr())) {
       m_keyboardInputSource = &keyboard;
-      if (!m_stopping && m_keyboardLeds != nullptr) {
-        m_keyboardLeds->update(keyboard.wlr());
-      }
-    } else {
-      refreshKeyboardLeds();
+    }
+    if (!m_stopping && m_keyboardLeds != nullptr) {
+      m_keyboardLeds->update(keyboard.wlr());
     }
   }
+
+  bool Server::syncingKeyboardLocks() const { return m_keyboardLeds != nullptr && m_keyboardLeds->syncing(); }
 
   void Server::refreshKeyboardLeds() {
     if (!m_stopping && m_keyboardLeds != nullptr) {

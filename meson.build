@@ -116,7 +116,7 @@ if is_glibc
   endif
 endif
 
-xkbcommon_dep = dependency('xkbcommon')
+xkbcommon_dep = dependency('xkbcommon', version: '>=1.10.0')
 libinput_dep = dependency('libinput', version: '>=1.27')
 libeis_dep = dependency('libeis-1.0', version: '>=1.3')
 pixman_dep = dependency('pixman-1', version: '>=0.43.0')
@@ -684,6 +684,7 @@ pure_sources = files(
   'src/input/swipe_tracker.cpp',
   'src/input/keyboard_layout.cpp',
   'src/input/keyboard_leds.cpp',
+  'src/input/keyboard_state.cpp',
   'src/input/surface_layouts.cpp',
   'src/input/shortcuts_inhibit.cpp',
   'src/input/shortcut_keysym.cpp',

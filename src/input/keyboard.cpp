@@ -5,6 +5,7 @@
 #include "input/cursor.h"
 #include "input/eis.h"
 #include "input/keyboard_layout.h"
+#include "input/keyboard_state.h"
 #include "input/seat.h"
 #include "input/shortcut_keysym.h"
 #include "input/text_input.h"
@@ -34,13 +35,6 @@ namespace umbriel {
       m_server->inputMethodRelay()->canonicalizeOwnedKeyboardKeymap(m_keyboard);
     }
     applyConfig();
-    if (!m_virtual && config().input.keyboard.numlockToggle && m_keyboard->keymap != nullptr) {
-      const xkb_mod_index_t numLock = xkb_keymap_mod_get_index(m_keyboard->keymap, XKB_MOD_NAME_NUM);
-      if (numLock != XKB_MOD_INVALID) {
-        wlr_keyboard_notify_modifiers(m_keyboard, 0, 0, 1U << numLock, 0);
-      }
-    }
-
     m_modifiers.notify = onModifiers;
     wl_signal_add(&m_keyboard->events.modifiers, &m_modifiers);
     m_key.notify = onKey;
@@ -90,7 +84,14 @@ namespace umbriel {
     xkb_keymap* keymap =
         context == nullptr ? nullptr : xkb_keymap_new_from_names(context, &rules, XKB_KEYMAP_COMPILE_NO_FLAGS);
     if (keymap != nullptr) {
-      wlr_keyboard_set_keymap(m_keyboard, keymap);
+      // Restoring lock state emits a synthetic modifiers event. It must not
+      // select an inactive keyboard as the user's current input source.
+      m_syncingLayout = true;
+      const bool applied = setKeyboardKeymapPreservingState(m_keyboard, keymap);
+      m_syncingLayout = false;
+      if (!applied) {
+        wlr_log(WLR_ERROR, "failed to apply keyboard keymap");
+      }
       xkb_keymap_unref(keymap);
     } else {
       wlr_log(WLR_ERROR, "failed to create keyboard keymap");
@@ -99,8 +100,8 @@ namespace umbriel {
       xkb_context_unref(context);
     }
     wlr_keyboard_set_repeat_info(m_keyboard, repeatRate, repeatDelay);
-    // A new keymap starts in group zero. Record it without treating initial
-    // setup or a config reload as a user-driven layout transition.
+    // A changed keymap starts in group zero; an identical map keeps its state.
+    // Record either without treating config reload as a user layout transition.
     m_lastNotifiedLayout = m_keyboard->xkb_state == nullptr
         ? XKB_LAYOUT_INVALID
         : xkb_state_serialize_layout(m_keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE);
@@ -230,11 +231,8 @@ namespace umbriel {
   }
 
   void Keyboard::handleModifiers() {
-    if (!m_virtual && m_server->eisInput() != nullptr) {
-      m_server->eisInput()->updateModifiers(m_keyboard->modifiers);
-    }
     wlr_seat* seat = m_server->seat()->wlr();
-    if (m_syncingLayout) {
+    if (m_syncingLayout || m_server->syncingKeyboardLocks()) {
       m_server->refreshKeyboardLeds();
       // A config reload can remap the seat's current keyboard to a differently
       // ordered matching group. Forward that current state, but never select or
@@ -250,6 +248,9 @@ namespace umbriel {
         m_server->seat()->notifyPointerModifiers();
       }
       return;
+    }
+    if (!m_virtual && m_server->eisInput() != nullptr) {
+      m_server->eisInput()->updateModifiers(m_keyboard->modifiers);
     }
     m_server->rememberKeyboardInputSource(*this);
     cancelRepeat();

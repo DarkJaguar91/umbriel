@@ -124,7 +124,7 @@ radius = 3
 
 # ==============================================================================
 # Input
-# Enable NumLock when a physical keyboard connects.
+# Enable NumLock for the first physical keyboard; later devices inherit current locks.
 # https://docs.noctalia.dev/umbriel/input/
 #
 # [input]

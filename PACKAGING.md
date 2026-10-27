@@ -66,7 +66,7 @@ The archive is linked as a whole so its internal utility symbols survive distrib
 - wlroots 0.20.1 or newer, and strictly below 0.21, built with session, libinput, and Xwayland support: `umbrielfx` compiles against wlroots' private struct layouts
 - wayland-server 1.24 or newer, plus the Wayland client library
 - wayland-protocols 1.47 or newer
-- xkbcommon
+- libxkbcommon 1.10.0 or newer (pkg-config: `xkbcommon`), required for server-side keyboard lock and latch updates
 - libinput 1.27 or newer
 - libeis 1.3 or newer (provided by libei)
 - libudev, required for native `[drm]` GPU exclusion support
