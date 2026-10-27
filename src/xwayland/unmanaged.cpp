@@ -146,8 +146,9 @@ namespace umbriel {
   }
 
   void XwaylandUnmanaged::handleRequestConfigure(const wlr_xwayland_surface_configure_event* event) {
-    // The resulting set_geometry moves the node.
     grantConfigureRequest(m_xsurface, event);
+    // The configure setter already updates X geometry, so ConfigureNotify may report no further change.
+    syncPosition();
   }
 
 } // namespace umbriel

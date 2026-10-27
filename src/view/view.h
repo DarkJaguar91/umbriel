@@ -509,6 +509,7 @@ namespace umbriel {
     void placeFloatingMaximized(const wlr_box& box, bool animate);
     friend class Overview;
     friend class Workspace;
+    friend class XwaylandWindow;
 
     // Move the frame, and a lent shadow with it.
     void setScenePosition(int x, int y);
@@ -601,7 +602,7 @@ namespace umbriel {
 
     static void onCaptureSourceDestroy(wl_listener* listener, void* data);
     void handleMap();
-    void handleUnmap();
+    void handleUnmap(bool animateClose = true);
     void handleCommit(bool reconfigureOpeningState = false);
     void setXdgTag(std::string_view tag);
     void syncContentType(wlr_surface* committedSurface = nullptr);

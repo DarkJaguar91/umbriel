@@ -2226,7 +2226,7 @@ namespace umbriel {
     assignShortcuts();
   }
 
-  void Overview::onViewUnmapped(View* view) {
+  void Overview::onViewUnmapped(View* view, bool animateClose) {
     if (!m_active || view == nullptr) {
       return;
     }
@@ -2257,7 +2257,7 @@ namespace umbriel {
     }
     Workspace* workspace = view->workspace();
     OutputState* state = stateForWorkspace(workspace);
-    if (Card* card = findCard(view)) {
+    if (Card* card = findCard(view); card != nullptr && animateClose) {
       snapshotCardForClose(*card);
     }
     dropCard(view);

@@ -539,7 +539,7 @@ namespace umbriel {
     }
   }
 
-  void View::handleUnmap() {
+  void View::handleUnmap(bool animateClose) {
     m_server->seat()->toplevelDrags().unmapped(this);
     if (m_effectSelectionIdle != nullptr) {
       wl_event_source_remove(m_effectSelectionIdle);
@@ -609,10 +609,10 @@ namespace umbriel {
       m_server->scratchpadManager()->remove(this);
     }
     if (Overview* overview = m_server->overview(); overview != nullptr && overview->active()) {
-      overview->onViewUnmapped(this);
+      overview->onViewUnmapped(this, animateClose);
     }
     // Replacement focus can hide the closing tab. Capture while its current visibility still decides eligibility.
-    const CloseSnapshotId snapshot = beginCloseAnimation();
+    const CloseSnapshotId snapshot = animateClose ? beginCloseAnimation() : kInvalidCloseSnapshot;
     // After the close capture, so a minimized window closes unseen. The live node is not re-enabled: a remap shows the
     // window normally.
     if (m_minimized) {

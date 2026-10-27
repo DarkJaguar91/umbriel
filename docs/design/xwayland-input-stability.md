@@ -10,6 +10,16 @@ Xwayland sends window association messages over the X11 connection and surface c
 
 `protocol/xwayland_association` exercises real Xwayland with an idle X11 client and a proxy on its private XWM connection. The proxy holds the selected association message while Wayland traffic continues. The check waits for the first buffer import, releases association, and requires the existing buffer to map without a redraw. It also checks ordinary ordering, managed window withdrawal and remapping, and rendered pixels from a delayed unmanaged window. Removing the catch-up must fail the delayed mapping transition.
 
+## Popup classification follows live X11 metadata
+
+Override-redirect windows and windows typed as menus, dropdowns, tooltips, combo popups, or drag icons use `XwaylandUnmanaged`. They keep client placement and bypass managed window rules. `XwaylandWindow` watches both override-redirect and window-type changes, switching wrappers immediately when their classification changes, including while mapped. Metadata updates that keep the same classification preserve the current wrapper.
+
+While managed, the window retains its client-requested X11 rectangle separately from compositor layout configures. Conversion to a popup restores that rectangle and clears maximize and fullscreen state. Direct client geometry changes accompanying an override-redirect transition are retained. Returning to managed classification seeds the saved rectangle from current popup geometry and applies normal opening policy.
+
+Wrapper changes preserve the Wayland surface's mapped state. A retiring View runs full unmap cleanup before destruction, including layout, focus, cursor grabs, effects, and overview cards, without creating desktop or overview close snapshots. A replacement View enters the registry before catching up with an already mapped surface. The XWM focus record is retired only on real dissociation, allowing a reused X window to take real X input focus on remap while preserving client focus transfers during live wrapper changes. Dissociation also schedules the deferred native focus clear, so retiring an old popup cannot leave X input focus at `PointerRoot` while a native window owns the seat.
+
+[`protocol/xwayland_popup_classification`](../../tests/harness/checks/protocol/xwayland_popup_classification.sh) exercises real Xwayland transitions under broad tiling and maximize rules. It checks pre-map popup metadata, mapped type and override-redirect changes, geometry recovery without a new client configure, cleared maximize and fullscreen state, rendered pixels, keyboard input, overview card removal, return to managed classification, remapping, and native focus retention after popup withdrawal. Run it as `just check protocol/xwayland_popup_classification`.
+
 ## Bounding shapes constrain scene coverage
 
 An X11 bounding shape can contain holes or disconnected rectangles. Xwayland exports the window's rectangular backing buffer without applying that mask to its alpha. Pixels outside the shape can therefore be opaque black, even for an ARGB window with a transparent background. Reading the window with XGetImage does not establish backing-buffer alpha: Xwayland can zero the returned pixels outside its visible region.

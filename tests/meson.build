@@ -409,6 +409,18 @@ xwayland_association_client = executable(
   dependencies: [xcb_dep],
 )
 
+xwayland_dialog_client = executable(
+  'xwayland-dialog-client',
+  ['harness/clients/xwayland_dialog_client.cpp'],
+  dependencies: [xcb_dep],
+)
+
+xwayland_popup_client = executable(
+  'xwayland-popup-client',
+  ['harness/clients/xwayland_popup_client.cpp'],
+  dependencies: [xcb_dep],
+)
+
 xwayland_input_client = executable(
   'xwayland-input-client',
   ['harness/clients/xwayland_input_client.cpp'],
@@ -535,6 +547,8 @@ harness_client_targets = [
   seat_log_client,
   xwayland_focus_client,
   xwayland_association_client,
+  xwayland_dialog_client,
+  xwayland_popup_client,
   xwayland_input_client,
   ei_peer_client,
   xwayland_selection_client,

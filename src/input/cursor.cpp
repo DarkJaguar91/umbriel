@@ -2454,9 +2454,26 @@ namespace umbriel {
     double oldSx = 0;
     double oldSy = 0;
     View* oldView = m_server->viewAt(oldX, oldY, &oldSurface, &oldSx, &oldSy);
+    // A tiled transient can open outside the viewport. Refreshing hover within its ancestor must not undo the
+    // reveal; crossing back into that ancestor still transfers focus.
+    bool hoveredAncestor = false;
+    const View* focused = View::fromSurface(seat->keyboard_state.focused_surface);
+    if (!scrollRefocus
+        && refocus
+        && view == oldView
+        && focused != nullptr
+        && focused->tiled()
+        && focused->workspace() == workspace) {
+      for (const View* parent = focused->transientParent(); parent != nullptr; parent = parent->transientParent()) {
+        if (parent == view) {
+          hoveredAncestor = true;
+          break;
+        }
+      }
+    }
     // Keyboard focus is an escape from rule confinement. While the pointer remains inside that window, an
     // invalidated hover must not immediately focus it again. A real re-entry (or a click) can still focus it.
-    const bool entered = view != oldView || (refocus && !ruleConstraintApplies(*view));
+    const bool entered = view != oldView || (refocus && !hoveredAncestor && !ruleConstraintApplies(*view));
     // Workspace focus is remembered independently from the seat. A pinned window from another workspace can own the
     // seat while this view remains its active workspace's remembered focus, so only seat-global activation of the
     // window that would take the keyboard (a dialog attached to this one) makes this handoff redundant.
