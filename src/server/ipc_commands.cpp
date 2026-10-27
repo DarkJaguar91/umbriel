@@ -922,6 +922,7 @@ namespace umbriel {
       nlohmann::json directScanout = nullptr;
       if (desktopEnabled && !output->dpmsOff()) {
         const DirectScanoutState& scanout = output->directScanout();
+        const DirectScanoutTracker& tracker = output->directScanoutTracker();
         nlohmann::json window = nullptr;
         if (scanout.active && !scanout.windowId.empty()) {
           window = {{"id", scanout.windowId}, {"app_id", scanout.appId}, {"title", scanout.title}};
@@ -930,6 +931,9 @@ namespace umbriel {
             {"active", scanout.active},
             {"reason", scanout.active ? nlohmann::json(nullptr) : nlohmann::json(scanout.reason)},
             {"window", std::move(window)},
+            {"commits", tracker.commits()},
+            {"scanout_commits", tracker.scanoutCommits()},
+            {"commit_seq", tracker.commitSeq()},
         };
       }
       outputs.push_back({
