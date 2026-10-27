@@ -67,6 +67,12 @@ namespace umbriel {
       uint32_t capabilities = 0;
       uint32_t lastZoneSet = 0;
       uint32_t activation = 0;
+      uint32_t persistMode = 0;
+      uint64_t permissionPeer = 0;
+      std::string application;
+      std::string applicationInstance;
+      std::string restoreToken;
+      std::string grantId;
       bool startAttempted = false;
       bool pending = false;
       bool approved = false;
@@ -457,10 +463,40 @@ namespace umbriel {
           return;
         }
         startAttempted = true;
-        pending = true;
         startRequest = request;
         capabilities = requested & 3U;
-        owner.authorize(id, *label != '\0' ? label : "Unknown application");
+        application = label;
+        wl_client* client = wl_resource_get_client(resource);
+        permissionPeer = owner.permissionPeer(client, "");
+        if (!restoreToken.empty()) {
+          const uint64_t scoped = owner.permissionPeer(client, applicationInstance, false);
+          const bool newScope = persistMode == 1 && scoped == 0;
+          const uint64_t restorePeer = persistMode == 1 ? owner.permissionPeer(client, applicationInstance)
+              : persistMode == 0 && scoped != 0         ? scoped
+                                                        : permissionPeer;
+          const auto grant =
+              owner.permissionStore.restore(restoreToken, application, capabilities, persistMode, restorePeer);
+          restoreToken.clear();
+          if (grant) {
+            permissionPeer = restorePeer;
+            approve(*grant);
+            return;
+          }
+          if (newScope) {
+            owner.forgetPermissionScope(client, applicationInstance);
+          }
+        }
+        pending = true;
+        owner.authorize(id, *label != '\0' ? label : "unidentified application", persistMode);
+      }
+
+      void approve(const InputCaptureGrant& grant) {
+        approved = true;
+        grantId = grant.id;
+        if (grant.persistMode != 0 && wl_resource_get_version(resource) >= 2) {
+          umbriel_input_capture_session_v1_send_grant(resource, startRequest, grant.persistMode, grant.token.c_str());
+        }
+        umbriel_input_capture_session_v1_send_started(resource, startRequest, kSuccess, capabilities);
       }
 
       void commitBarriers(uint32_t request, uint32_t generation) {
@@ -494,6 +530,79 @@ namespace umbriel {
     std::vector<wlr_keyboard*> keyboards;
     std::vector<std::unique_ptr<Session>> sessions;
     std::vector<wl_resource*> managers;
+    InputCapturePermissions permissionStore{InputCapturePermissions::defaultPath()};
+    struct Peer {
+      struct DestroyListener {
+        wl_listener listener{};
+        Peer* peer = nullptr;
+      } destroy;
+      Impl* owner = nullptr;
+      wl_client* client = nullptr;
+      std::unordered_map<std::string, uint64_t> scopes;
+      ~Peer() { wl_list_remove(&destroy.listener.link); }
+    };
+    uint64_t nextPermissionPeer = 0;
+    std::unordered_map<wl_client*, std::unique_ptr<Peer>> permissionPeers;
+
+    uint64_t permissionPeer(wl_client* client, const std::string& scope, bool create = true) {
+      auto found = permissionPeers.find(client);
+      if (found == permissionPeers.end()) {
+        if (!create) {
+          return 0;
+        }
+        auto peer = std::make_unique<Peer>();
+        peer->owner = this;
+        peer->client = client;
+        peer->destroy.peer = peer.get();
+        peer->destroy.listener.notify = [](wl_listener* listener, void*) {
+          Peer::DestroyListener* hook = nullptr;
+          hook = wl_container_of(listener, hook, listener);
+          Peer* peer = hook->peer;
+          for (const auto& [name, id] : peer->scopes) {
+            (void)name;
+            peer->owner->permissionStore.expirePeer(id);
+          }
+          peer->owner->permissionPeers.erase(peer->client);
+        };
+        wl_client_add_destroy_listener(client, &peer->destroy.listener);
+        found = permissionPeers.emplace(client, std::move(peer)).first;
+      }
+      if (!create) {
+        const auto entry = found->second->scopes.find(scope);
+        return entry != found->second->scopes.end() ? entry->second : 0;
+      }
+      auto& id = found->second->scopes[scope];
+      if (id == 0) {
+        id = ++nextPermissionPeer;
+      }
+      return id;
+    }
+
+    void forgetPermissionScope(wl_client* client, const std::string& scope) {
+      const auto found = permissionPeers.find(client);
+      if (found != permissionPeers.end()) {
+        found->second->scopes.erase(scope);
+      }
+    }
+
+    void expireScope(wl_client* client, std::string_view scope) {
+      const auto peer = permissionPeers.find(client);
+      if (peer == permissionPeers.end()) {
+        return;
+      }
+      const auto found = peer->second->scopes.find(std::string(scope));
+      if (found == peer->second->scopes.end()) {
+        return;
+      }
+      const uint64_t id = found->second;
+      permissionStore.expirePeer(id);
+      peer->second->scopes.erase(found);
+      for (const auto& state : sessions) {
+        if (state->permissionPeer == id) {
+          state->close();
+        }
+      }
+    }
 
     explicit Impl(Server& server) : server(server) {}
     ~Impl() {
@@ -506,6 +615,7 @@ namespace umbriel {
       while (!managers.empty()) {
         wl_resource_destroy(managers.back());
       }
+      permissionPeers.clear();
     }
 
     [[nodiscard]] bool blocked() const {
@@ -517,7 +627,7 @@ namespace umbriel {
 
     void initialize() {
       global = wl_global_create(
-          server.display(), &umbriel_input_capture_manager_v1_interface, 1, this,
+          server.display(), &umbriel_input_capture_manager_v1_interface, 2, this,
           [](wl_client* client, void* data, uint32_t version, uint32_t id) {
             auto* self = static_cast<Impl*>(data);
             wl_resource* resource =
@@ -547,7 +657,8 @@ namespace umbriel {
         return;
       }
       auto session = std::make_unique<Session>(*self);
-      session->resource = wl_resource_create(client, &umbriel_input_capture_session_v1_interface, 1, id);
+      session->resource =
+          wl_resource_create(client, &umbriel_input_capture_session_v1_interface, wl_resource_get_version(manager), id);
       if (session->resource == nullptr) {
         wl_client_post_no_memory(client);
         return;
@@ -564,12 +675,19 @@ namespace umbriel {
       return *static_cast<Session*>(wl_resource_get_user_data(resource));
     }
 
-    static constexpr struct umbriel_input_capture_manager_v1_interface kManager{
-        .destroy = destroy,
-        .create_session = createSession,
-    };
-
+    static const struct umbriel_input_capture_manager_v1_interface kManager;
     static const struct umbriel_input_capture_session_v1_interface kSession;
+  };
+
+  const struct umbriel_input_capture_manager_v1_interface InputCapture::Impl::kManager{
+      .destroy = destroy,
+      .create_session = createSession,
+      .expire_scope = [](wl_client* client, wl_resource* resource, const char* scope) {
+        auto* owner = static_cast<Impl*>(wl_resource_get_user_data(resource));
+        if (scope != nullptr && std::char_traits<char>::length(scope) <= 256) {
+          owner->expireScope(client, scope);
+        }
+      },
   };
 
   const struct umbriel_input_capture_session_v1_interface InputCapture::Impl::kSession{
@@ -646,6 +764,22 @@ namespace umbriel {
             }
             state.result(request, !state.closed && state.approved);
           },
+      .set_persistence =
+          [](wl_client*, wl_resource* resource, uint32_t mode, const char* token, const char* instance) {
+            auto& state = session(resource);
+            if (state.startAttempted
+                || mode > 2
+                || token == nullptr
+                || instance == nullptr
+                || std::char_traits<char>::length(token) > 4096
+                || std::char_traits<char>::length(instance) > 256) {
+              state.close();
+              return;
+            }
+            state.persistMode = mode;
+            state.restoreToken = std::char_traits<char>::length(token) == 64 ? token : "";
+            state.applicationInstance = instance;
+          },
   };
 
   InputCapture::InputCapture(Server& server) : m_impl(std::make_unique<Impl>(server)) {
@@ -661,18 +795,57 @@ namespace umbriel {
   bool InputCapture::active() const { return m_impl->active != nullptr; }
   uint32_t InputCapture::capabilities() const { return m_impl->active != nullptr ? m_impl->active->capabilities : 0; }
 
-  void InputCapture::authorizeSession(uint64_t id, bool allowed) {
+  void InputCapture::authorizeSession(uint64_t id, bool allowed, bool remember) {
     const auto found = std::ranges::find_if(m_impl->sessions, [id](const auto& state) { return state->id == id; });
     if (found == m_impl->sessions.end() || !(*found)->pending) {
       return;
     }
     auto& state = **found;
     state.pending = false;
-    state.approved = allowed && !m_impl->blocked();
+    if (allowed && !m_impl->blocked()) {
+      if (!remember) {
+        state.approve({});
+        return;
+      }
+      if (state.persistMode != 0) {
+        wl_client* client = wl_resource_get_client(state.resource);
+        const uint64_t previous = m_impl->permissionPeer(client, state.applicationInstance, false);
+        const bool newScope = state.persistMode == 1 && previous == 0;
+        if (state.persistMode == 1) {
+          state.permissionPeer = m_impl->permissionPeer(client, state.applicationInstance);
+        }
+        const auto grant = m_impl->permissionStore.issue(
+            state.application, state.capabilities, state.persistMode, state.permissionPeer
+        );
+        if (grant) {
+          state.approve(*grant);
+          return;
+        }
+        if (newScope) {
+          m_impl->forgetPermissionScope(client, state.applicationInstance);
+        }
+        kLog.error("unable to save input capture permission; capture was not started");
+      }
+      umbriel_input_capture_session_v1_send_started(state.resource, state.startRequest, kFailure, 0);
+      return;
+    }
+    state.approved = false;
     umbriel_input_capture_session_v1_send_started(
         state.resource, state.startRequest, state.approved ? kSuccess : kCancelled,
         state.approved ? state.capabilities : 0
     );
+  }
+
+  std::vector<InputCapturePermission> InputCapture::permissions() { return m_impl->permissionStore.list(); }
+
+  bool InputCapture::revokePermission(std::string_view id) {
+    const bool forgotten = m_impl->permissionStore.revoke(id);
+    for (const auto& state : m_impl->sessions) {
+      if (!state->grantId.empty() && (id == "all" || state->grantId == id)) {
+        state->close();
+      }
+    }
+    return forgotten;
   }
 
   void InputCapture::addKeyboard(wlr_keyboard* keyboard) {

@@ -25,6 +25,7 @@ unit_tests = [
   ['keyboard-leds', ['unit/keyboard_leds.cpp'], [wayland_server_dep]],
   ['keyboard-state', ['unit/keyboard_state.cpp'], [wayland_server_dep]],
   ['input-capture-geometry', ['unit/input_capture_geometry.cpp'], []],
+  ['input-capture-permissions', ['unit/input_capture_permissions.cpp'], [umbriel_core_dep]],
   ['eis-socket', ['unit/eis_socket.cpp'], [umbriel_core_dep, wayland_server_dep]],
   ['surface-layouts', ['unit/surface_layouts.cpp'], []],
   ['shortcuts-inhibit', ['unit/shortcuts_inhibit.cpp'], []],

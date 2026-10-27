@@ -2,11 +2,13 @@
 // compositor still requires physical consent; this client cannot approve it.
 #include "umbriel-input-capture-v1-client-protocol.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <fstream>
 #include <libei.h>
 #include <poll.h>
 #include <print>
@@ -21,10 +23,15 @@ namespace {
     umbriel_input_capture_manager_v1* manager = nullptr;
     umbriel_input_capture_session_v1* session = nullptr;
     ei* receiver = nullptr;
+    uint32_t protocolVersion = 1;
     uint32_t serial = 1;
     uint32_t zoneSet = 0;
     uint32_t activation = 0;
     std::string pending;
+    std::string application = "capture protocol test";
+    std::string applicationInstance = "private-test";
+    std::string restoreToken;
+    std::string grantToken;
     bool done = false;
   };
 
@@ -133,6 +140,11 @@ namespace {
   }
   void closed(void*, umbriel_input_capture_session_v1*) { std::puts("closed"); }
 
+  void grant(void* data, umbriel_input_capture_session_v1*, uint32_t request, uint32_t mode, const char* token) {
+    static_cast<State*>(data)->grantToken = token;
+    std::println("grant request={} mode={} token={}", request, mode, *token != '\0' ? 1 : 0);
+  }
+
   constexpr umbriel_input_capture_session_v1_listener kSessionListener{
       .started = started,
       .zone = zone,
@@ -146,13 +158,14 @@ namespace {
       .disabled = disabled,
       .zones_changed = zonesChanged,
       .closed = closed,
+      .grant = grant,
   };
-  void global(void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t) {
+  void global(void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
     auto& state = *static_cast<State*>(data);
     if (std::strcmp(interface, umbriel_input_capture_manager_v1_interface.name) == 0) {
-      state.manager = static_cast<umbriel_input_capture_manager_v1*>(
-          wl_registry_bind(registry, name, &umbriel_input_capture_manager_v1_interface, 1)
-      );
+      state.manager = static_cast<umbriel_input_capture_manager_v1*>(wl_registry_bind(
+          registry, name, &umbriel_input_capture_manager_v1_interface, std::min(version, state.protocolVersion)
+      ));
     }
   }
   void globalRemove(void*, wl_registry*, uint32_t) {}
@@ -165,8 +178,61 @@ namespace {
     const uint32_t request = state.serial++;
     if (action == "start") {
       uint32_t capabilities = 3;
-      input >> capabilities;
-      umbriel_input_capture_session_v1_start(state.session, request, "capture protocol test", capabilities);
+      uint32_t persistMode = 0;
+      input >> capabilities >> persistMode;
+      if (state.protocolVersion >= 2)
+        umbriel_input_capture_session_v1_set_persistence(
+            state.session, persistMode, state.restoreToken.c_str(), state.applicationInstance.c_str()
+        );
+      umbriel_input_capture_session_v1_start(state.session, request, state.application.c_str(), capabilities);
+    } else if (action == "application") {
+      std::getline(input >> std::ws, state.application);
+      std::println("application length={}", state.application.size());
+    } else if (action == "scope") {
+      input >> state.applicationInstance;
+      std::puts("scope-set");
+    } else if (action == "expire-scope") {
+      std::string scope = state.applicationInstance;
+      input >> scope;
+      umbriel_input_capture_manager_v1_expire_scope(state.manager, scope.c_str());
+      std::puts("scope-expired");
+    } else if (action == "load-grant") {
+      std::string path;
+      input >> path;
+      std::ifstream file(path);
+      if (!std::getline(file, state.restoreToken) || state.restoreToken.empty()) {
+        std::println(stderr, "cannot load grant");
+        state.done = true;
+      } else {
+        std::puts("grant-loaded");
+      }
+    } else if (action == "save-grant") {
+      std::string path;
+      input >> path;
+      if (path.empty() || state.grantToken.empty()) {
+        std::println(stderr, "cannot save empty grant");
+        state.done = true;
+      } else {
+        std::ofstream file(path);
+        file << state.grantToken << '\n';
+        file.close();
+        if (!file) {
+          std::println(stderr, "cannot save grant");
+          state.done = true;
+        } else {
+          std::puts("grant-saved");
+        }
+      }
+    } else if (action == "new-session") {
+      if (state.receiver != nullptr)
+        state.receiver = ei_unref(state.receiver);
+      if (state.session != nullptr)
+        umbriel_input_capture_session_v1_destroy(state.session);
+      state.session = umbriel_input_capture_manager_v1_create_session(state.manager);
+      umbriel_input_capture_session_v1_add_listener(state.session, &kSessionListener, &state);
+      state.activation = 0;
+      state.zoneSet = 0;
+      std::puts("ready new-session");
     } else if (action == "zones") {
       umbriel_input_capture_session_v1_get_zones(state.session, request);
     } else if (action == "barrier") {
@@ -211,6 +277,8 @@ namespace {
 int main() {
   setvbuf(stdout, nullptr, _IOLBF, 0);
   State state;
+  if (const char* version = std::getenv("CAPTURE_PROTOCOL_VERSION"))
+    state.protocolVersion = std::strtoul(version, nullptr, 10);
   state.display = wl_display_connect(nullptr);
   if (state.display == nullptr)
     return 1;

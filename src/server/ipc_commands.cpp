@@ -3,6 +3,7 @@
 #include "config/change.h"
 #include "config/config.h"
 #include "input/cursor.h"
+#include "input/input_capture.h"
 #include "layer/layer_surface.h"
 #include "output/identity.h"
 #include "output/output.h"
@@ -31,6 +32,32 @@ extern "C" {
 }
 
 namespace umbriel {
+
+  nlohmann::json IpcCommands::inputCapturePermissions(Server& server, std::string_view) {
+    auto result = nlohmann::json::array();
+    if (auto* capture = server.inputCapture()) {
+      for (const auto& permission : capture->permissions()) {
+        result.push_back(
+            {{"id", permission.id},
+             {"application", permission.application},
+             {"capabilities", permission.capabilities},
+             {"persist_mode", permission.persistMode}}
+        );
+      }
+    }
+    return nlohmann::json{{"ok", std::move(result)}};
+  }
+
+  nlohmann::json IpcCommands::inputCaptureRevoke(Server& server, std::string_view arg) {
+    if (arg.empty() || arg.find_first_of(" \t\r\n") != std::string_view::npos) {
+      return nlohmann::json{{"err", "usage: input-capture-revoke <id|all>"}};
+    }
+    auto* capture = server.inputCapture();
+    if (capture == nullptr || !capture->revokePermission(arg)) {
+      return nlohmann::json{{"err", "unable to revoke input capture permission (invalid id or state write failed)"}};
+    }
+    return nlohmann::json{{"ok", true}};
+  }
 
   std::optional<EffectAudio> IpcCommands::parseAudioSpectrum(const nlohmann::json& request) {
     if (!request.is_object()
@@ -1362,6 +1389,10 @@ namespace umbriel {
   }
 
   static constexpr IpcCommandSpec kIpcCommands[] = {
+      {"input-capture-permissions", "", "list remembered input capture grants", IpcCommandGroup::Inspect, false,
+       &IpcCommands::inputCapturePermissions, nullptr},
+      {"input-capture-revoke", "<id|all>", "forget capture permission and stop sessions using it",
+       IpcCommandGroup::Control, true, &IpcCommands::inputCaptureRevoke, nullptr},
       {"msg", "<action> [args...]", "send an action to the compositor", IpcCommandGroup::Control, true,
        &IpcCommands::msg, nullptr},
       {"output-create", "<name> [mode]", "create a virtual output (optional mode, as 1920x1080@60)",

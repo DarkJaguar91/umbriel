@@ -2,6 +2,7 @@
 # Uses a private bus and a real compositor with backend-boundary input devices.
 # No pointer, keyboard, configuration, or session service on the host is changed.
 set -euo pipefail
+umask 077
 
 readonly BUILD=$(realpath "${1:?usage: input_capture.sh UMBRIEL_BUILD PORTAL_BUILD [XDG_DESKTOP_PORTAL]}")
 readonly PORTAL_BUILD=$(realpath "${2:?portal build directory required}")
@@ -14,14 +15,15 @@ if [[ ! -x $FRONTEND ]]; then
   echo "Pass the xdg-desktop-portal executable as the third argument."
   exit 2
 fi
+readonly PERMISSION_STORE=${UMBRIEL_CAPTURE_PERMISSION_STORE:-$(dirname "$(realpath "$FRONTEND")")/xdg-permission-store}
 readonly RUNTIME=$(mktemp -d "${TMPDIR:-/tmp}/umbriel-input-capture.XXXXXXXX")
 chmod 700 "$RUNTIME"
 PIDS=()
 SUCCESS=0
 cleanup() {
   local pid
-  for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
-  for pid in "${PIDS[@]}"; do wait "$pid" 2>/dev/null || true; done
+  for pid in "${PIDS[@]}"; do kill "$pid" 2> /dev/null || true; done
+  for pid in "${PIDS[@]}"; do wait "$pid" 2> /dev/null || true; done
   if ((SUCCESS)) && [[ ${UMBRIEL_CAPTURE_KEEP_LOGS:-0} != 1 ]]; then
     rm -rf "$RUNTIME"
   else
@@ -34,6 +36,7 @@ export XDG_RUNTIME_DIR=$RUNTIME
 export XDG_CONFIG_HOME=$RUNTIME/config
 export XDG_DATA_HOME=$RUNTIME/data-home
 export XDG_CACHE_HOME=$RUNTIME/cache
+export XDG_STATE_HOME=$RUNTIME/state
 export XDG_DATA_DIRS=$RUNTIME/data
 export XDG_CONFIG_DIRS=$RUNTIME/config-dirs
 export XDG_CURRENT_DESKTOP=umbriel
@@ -46,12 +49,12 @@ unset DISPLAY WAYLAND_SOCKET NOTIFY_SOCKET SYSTEMD_EXEC_PID
 mkdir -p "$XDG_CONFIG_HOME/xdg-desktop-portal" "$RUNTIME/portals" "$RUNTIME/data" "$XDG_DATA_HOME"
 cp "$PORTAL_REPO/data/umbriel.portal" "$RUNTIME/portals/umbriel.portal"
 export XDG_DESKTOP_PORTAL_DIR=$RUNTIME/portals
-cat > "$XDG_CONFIG_HOME/xdg-desktop-portal/portals.conf" <<'CONFIG'
+cat > "$XDG_CONFIG_HOME/xdg-desktop-portal/portals.conf" << 'CONFIG'
 [preferred]
 default=umbriel
 org.freedesktop.impl.portal.InputCapture=umbriel
 CONFIG
-cat > "$RUNTIME/config.toml" <<'CONFIG'
+cat > "$RUNTIME/config.toml" << 'CONFIG'
 [general]
 xwayland = false
 show_cheatsheet = false
@@ -65,13 +68,17 @@ CONFIG
 
 dbus-daemon --session --nofork --address="$DBUS_SESSION_BUS_ADDRESS" > "$RUNTIME/bus.log" 2>&1 &
 PIDS+=("$!")
-for _ in $(seq 100); do [[ -S $RUNTIME/bus ]] && break; sleep 0.025; done
+for _ in $(seq 100); do
+  [[ -S $RUNTIME/bus ]] && break
+  sleep 0.025
+done
 
 mkfifo "$RUNTIME/physical.fifo"
 exec {PHYSICAL_FD}<> "$RUNTIME/physical.fifo"
 WAYLAND_DISPLAY=input-capture-isolated-parent WLR_BACKENDS=headless WLR_HEADLESS_OUTPUTS=1 \
   "$COMPOSITOR" "$RUNTIME/config.toml" <&"$PHYSICAL_FD" > "$RUNTIME/compositor.log" 2>&1 &
-PIDS+=("$!")
+COMPOSITOR_PID=$!
+PIDS+=("$COMPOSITOR_PID")
 
 source "$REPO/tests/harness/lib.sh"
 await_events "$RUNTIME/compositor.log" 'ready display=' 1 "isolated physical-input compositor"
@@ -139,18 +146,31 @@ await_events "$RUNTIME/private.log" 'started .*status=1' 1 "physical rejection"
 printf 'quit\n' >&"$PRIVATE_FD"
 wait "$private_pid"
 
-"$PORTAL_SERVER" > "$RUNTIME/portal.log" 2>&1 &
+if [[ ! -x $PERMISSION_STORE ]]; then
+  echo "The portal frontend package must provide xdg-permission-store for persistence tests."
+  exit 2
+fi
+"$PERMISSION_STORE" > "$RUNTIME/permission-store.log" 2>&1 &
 PIDS+=("$!")
 for _ in $(seq 100); do
   if dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
-      org.freedesktop.DBus.NameHasOwner string:org.freedesktop.impl.portal.desktop.umbriel 2>/dev/null | grep -q 'boolean true'; then break; fi
+    org.freedesktop.DBus.NameHasOwner string:org.freedesktop.impl.portal.PermissionStore 2> /dev/null | grep -q 'boolean true'; then break; fi
+  sleep 0.025
+done
+
+"$PORTAL_SERVER" > "$RUNTIME/portal.log" 2>&1 &
+PORTAL_PID=$!
+PIDS+=("$PORTAL_PID")
+for _ in $(seq 100); do
+  if dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+    org.freedesktop.DBus.NameHasOwner string:org.freedesktop.impl.portal.desktop.umbriel 2> /dev/null | grep -q 'boolean true'; then break; fi
   sleep 0.025
 done
 "$FRONTEND" > "$RUNTIME/frontend.log" 2>&1 &
 PIDS+=("$!")
 for _ in $(seq 100); do
   if dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
-      org.freedesktop.DBus.NameHasOwner string:org.freedesktop.portal.Desktop 2>/dev/null | grep -q 'boolean true'; then break; fi
+    org.freedesktop.DBus.NameHasOwner string:org.freedesktop.portal.Desktop 2> /dev/null | grep -q 'boolean true'; then break; fi
   sleep 0.025
 done
 
@@ -256,7 +276,7 @@ status_before=$(events "$RUNTIME/compositor.log" status)
 physical status
 await_events "$RUNTIME/compositor.log" status "$((status_before + 1))" "emergency release cursor position"
 if ! grep '^status ' "$RUNTIME/compositor.log" | tail -1 |
-    awk -v right="$RIGHT" '{for(i=1;i<=NF;i++)if($i~/^x=/){split($i,a,"=");exit !(a[2]>=right-1&&a[2]<=right)}}'; then
+  awk -v right="$RIGHT" '{for(i=1;i<=NF;i++)if($i~/^x=/){split($i,a,"=");exit !(a[2]>=right-1&&a[2]<=right)}}'; then
   echo "emergency release did not leave the cursor at the barrier"
   exit 1
 fi
@@ -333,7 +353,7 @@ await_events "$CRASH_LOG" activated 1 "capture before application disconnect"
 physical 'press 30' 'button 272 1'
 await_events "$CRASH_LOG" 'ei-key code=30 state=pressed' 1 "held key before disconnect"
 kill "$crash_pid"
-wait "$crash_pid" 2>/dev/null || true
+wait "$crash_pid" 2> /dev/null || true
 for _ in $(seq 100); do
   status_before=$(events "$RUNTIME/compositor.log" status)
   physical status
@@ -394,7 +414,7 @@ done
 # EI regions describe the full logical desktop, including negative origins and
 # mixed scales. A local monitor seam stays local; exterior barriers hand input
 # to the application from every side of the multi-output layout.
-cat >> "$RUNTIME/config.toml" <<'CONFIG'
+cat >> "$RUNTIME/config.toml" << 'CONFIG'
 [output.HEADLESS-1]
 mode = "640x360"
 position = [-640, 0]
@@ -421,9 +441,9 @@ await_events "$LAYOUT_LOG" 'ei-pointer-resumed id=1' 1 "multi-output pointer rea
 send 'regions layout'
 await_events "$LAYOUT_LOG" 'ei-regions label=layout ' 1 "multi-output EI region snapshot"
 for expected in \
-    'ei-regions label=layout count=2 width=1280 height=540' \
-    'ei-region label=layout x=0 y=180 width=640 height=360 scale=1.000' \
-    'ei-region label=layout x=640 y=0 width=640 height=360 scale=2.000'; do
+  'ei-regions label=layout count=2 width=1280 height=540' \
+  'ei-region label=layout x=0 y=180 width=640 height=360 scale=1.000' \
+  'ei-region label=layout x=640 y=0 width=640 height=360 scale=2.000'; do
   if ! grep -Fq "$expected" "$LAYOUT_LOG"; then
     echo "Missing EI layout metadata: $expected"
     cat "$LAYOUT_LOG"
@@ -458,13 +478,22 @@ await_events "$LAYOUT_LOG" 'requested release' 1 "multi-output capture released"
 
 side=1
 for barrier in \
-    '8 -640 0 -640 359' \
-    '9 0 -180 639 -180' \
-    '10 -640 360 -1 360'; do
+  '8 -640 0 -640 359' \
+  '9 0 -180 639 -180' \
+  '10 -640 360 -1 360'; do
   case $side in
-    1) approach='at -639 90'; cross='move -20 0' ;;
-    2) approach='at 100 -179'; cross='move 0 -20' ;;
-    3) approach='at -320 359'; cross='move 0 20' ;;
+    1)
+      approach='at -639 90'
+      cross='move -20 0'
+      ;;
+    2)
+      approach='at 100 -179'
+      cross='move 0 -20'
+      ;;
+    3)
+      approach='at -320 359'
+      cross='move 0 20'
+      ;;
   esac
   send disable
   await_events "$LAYOUT_LOG" 'requested disable' "$side" "disabling before replacing barrier $side"
@@ -489,8 +518,8 @@ await_events "$LAYOUT_LOG" 'ei-pointer-resumed id=2' 1 "pointer replaced after a
 send 'regions rescaled'
 await_events "$LAYOUT_LOG" 'ei-regions label=rescaled ' 1 "rescaled EI region snapshot"
 for expected in \
-    'ei-regions label=rescaled count=2 width=1280 height=540' \
-    'ei-region label=rescaled x=640 y=0 width=640 height=360 scale=1.000'; do
+  'ei-regions label=rescaled count=2 width=1280 height=540' \
+  'ei-region label=rescaled x=640 y=0 width=640 height=360 scale=1.000'; do
   if ! grep -Fq "$expected" "$LAYOUT_LOG"; then
     echo "EI scale change altered logical bounds or retained old metadata: $expected"
     cat "$LAYOUT_LOG"
@@ -516,7 +545,8 @@ if ! grep '^status ' "$RUNTIME/compositor.log" | tail -1 | grep -q 'confirmation
   exit 1
 fi
 send quit
-wait "$touch_pid" 2>/dev/null || true
+wait "$touch_pid" 2> /dev/null || true
+source "$REPO/tests/input_capture_persistence.sh"
 physical quit
-echo "InputCapture v2: frontend consent, EI handoff, local suppression, release, escape, lock and disconnect passed"
+echo "InputCapture v2: consent, EI routing, geometry, remembered permission, restart and revocation passed"
 SUCCESS=1

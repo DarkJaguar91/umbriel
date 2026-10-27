@@ -1,5 +1,7 @@
 #pragma once
 
+#include "input/input_capture_permissions.h"
+
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -15,7 +17,7 @@ namespace umbriel {
   // Wayland bridge exposes only permission-scoped sessions and an EI FD.
   class InputCapture {
   public:
-    using AuthorizationRequest = std::function<void(uint64_t, std::string_view)>;
+    using AuthorizationRequest = std::function<void(uint64_t, std::string_view, uint32_t)>;
     using AuthorizationCancelled = std::function<void(uint64_t)>;
     using ActiveChanged = std::function<void(bool)>;
 
@@ -27,7 +29,9 @@ namespace umbriel {
     void setAuthorize(AuthorizationRequest request);
     void setAuthorizationCancelled(AuthorizationCancelled cancelled);
     void setActiveChanged(ActiveChanged changed);
-    void authorizeSession(uint64_t id, bool allowed);
+    void authorizeSession(uint64_t id, bool allowed, bool remember = false);
+    [[nodiscard]] std::vector<InputCapturePermission> permissions();
+    [[nodiscard]] bool revokePermission(std::string_view id);
     [[nodiscard]] bool active() const;
     [[nodiscard]] uint32_t capabilities() const;
     void addKeyboard(wlr_keyboard* keyboard);

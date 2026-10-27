@@ -285,7 +285,7 @@ namespace umbriel {
     void stopFollowingScreenCast();
     void confirmScreenCastDynamic();
     void confirmInputEmulation();
-    void confirmInputCapture();
+    void confirmInputCapture(bool remember = false);
     void dismissConfirmation();
     // Owners register themselves for the frame tick. The registry is kept in phase order, so the three traversals above
     // never re-state which owners exist or in what order they run.
@@ -523,7 +523,7 @@ namespace umbriel {
     friend class EisInput;
     void requestInputEmulation(uint64_t id, std::string_view name);
     void cancelInputEmulation(uint64_t id);
-    void requestInputCapture(uint64_t id, std::string_view name);
+    void requestInputCapture(uint64_t id, std::string_view name, uint32_t persistMode);
     void cancelInputCapture(uint64_t id);
     void inputCaptureStateChanged(bool active);
     static void onSessionActive(wl_listener* listener, void* data);

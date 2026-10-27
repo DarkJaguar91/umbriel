@@ -43,8 +43,9 @@ namespace umbriel {
     show(Kind::InputEmulation);
   }
 
-  void QuitConfirm::showInputCapture(std::string_view application) {
+  void QuitConfirm::showInputCapture(std::string_view application, uint32_t persistMode) {
     m_application = application;
+    m_inputCapturePersistMode = persistMode;
     show(Kind::InputCapture);
   }
 
@@ -98,13 +99,24 @@ namespace umbriel {
         : m_kind == Kind::InputEmulation                          ? "Allow desktop control?"
         : m_kind == Kind::SessionQuit                             ? "Quit Umbriel?"
                                                                   : "Allow screencast target changes?";
+    std::string_view captureChoices = "Enter allows this capture session.\n"
+                                      "Any other key or click denies it.";
+    if (m_inputCapturePersistMode == 1) {
+      captureChoices = "Enter allows once.\n"
+                       "R remembers approval while the application runs.\n"
+                       "Any other key or click denies it.";
+    } else if (m_inputCapturePersistMode == 2) {
+      captureChoices = "Enter allows once.\n"
+                       "R remembers approval until you revoke it.\n"
+                       "Any other key or click denies it.";
+    }
     const std::string detail = m_kind == Kind::InputCapture
         ? std::format(
               "A client requesting capture for '{}' wants to send your input to another application.\n"
-              "The application label is supplied by the requester.\n"
-              "Enter allows this capture session; any other key or click denies it.\n"
+              "The application label is supplied by the requester.\n\n"
+              "{}\n\n"
               "Press Ctrl+Alt+Escape to stop capture and restore local control.",
-              m_application
+              m_application, captureChoices
           )
         : m_kind == Kind::InputEmulation
         ? std::format(
@@ -117,7 +129,10 @@ namespace umbriel {
         : "This can reveal another window or screen. Enter confirms; any other key or click cancels";
     std::string markup =
         std::format("<span size='14pt' weight='bold' foreground='{}'>{}</span>", headingColor, heading);
-    markup += std::format("\n<span foreground='{}'>{}</span>", textColor, escapeMarkup(detail));
+    markup += std::format(
+        "{}<span foreground='{}'>{}</span>", m_kind == Kind::InputCapture ? "\n\n" : "\n", textColor,
+        escapeMarkup(detail)
+    );
     TextBufferResult rendered = renderTextBuffer({
         .markup = std::move(markup),
         .font = "monospace 11",

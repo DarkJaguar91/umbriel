@@ -392,15 +392,20 @@ namespace umbriel {
           handled = true;
         }
       }
-      // Modal confirmation: Enter or a matching action confirms, while any other non-modifier key cancels. The press is
-      // consumed either way, reaching neither binds nor clients. Modifier-only presses pass through so held chords stay
-      // intact.
+      // Modal confirmation consumes non-modifier presses before binds or clients.
+      // Enter or a matching action confirms; input capture can also offer R to
+      // remember approval. Modifier-only presses keep held chords intact.
       bool confirmationConsumed = false;
       if (QuitConfirm* confirm = m_server->quitConfirm(); confirm != nullptr && confirm->visible()) {
         if (!modifierOnly) {
           bool confirmed = false;
+          bool rememberCapture = false;
           for (int i = 0; i < nsyms; ++i) {
             confirmed = confirmed || syms[i] == XKB_KEY_Return || syms[i] == XKB_KEY_KP_Enter;
+            if (!m_virtual && confirm->canRememberInputCapture() && (syms[i] == XKB_KEY_r || syms[i] == XKB_KEY_R)) {
+              confirmed = true;
+              rememberCapture = true;
+            }
           }
           // Repeating the quit action or any target-changing screencast action confirms its corresponding panel.
           // matchKeybind mirrors handleKeybind without running the action, so the pending screencast command remains
@@ -425,7 +430,7 @@ namespace umbriel {
             } else if (confirm->kind() == QuitConfirm::Kind::InputEmulation) {
               m_server->confirmInputEmulation();
             } else if (confirm->kind() == QuitConfirm::Kind::InputCapture) {
-              m_server->confirmInputCapture();
+              m_server->confirmInputCapture(rememberCapture);
             } else {
               m_server->confirmScreenCastDynamic();
             }

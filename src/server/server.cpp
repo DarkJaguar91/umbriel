@@ -434,12 +434,11 @@ namespace umbriel {
     }
   }
 
-  void Server::requestInputCapture(uint64_t id, std::string_view name) {
+  void Server::requestInputCapture(uint64_t id, std::string_view name, uint32_t persistMode) {
     if (m_stopping
         || m_sessionLock != nullptr
         || sessionLocked()
         || (m_session != nullptr && !m_session->active)
-        || name.empty()
         || name.size() > 256
         || m_quitConfirm == nullptr
         || m_quitConfirm->visible()
@@ -452,24 +451,25 @@ namespace umbriel {
     for (const unsigned char character : name) {
       label += character >= 32 && character < 127 ? static_cast<char>(character) : '?';
     }
-    m_quitConfirm->showInputCapture(label);
+    m_quitConfirm->showInputCapture(label.empty() ? "Unknown application" : label, persistMode);
     if (!m_quitConfirm->visible()) {
       dismissConfirmation();
     }
   }
 
-  void Server::confirmInputCapture() {
+  void Server::confirmInputCapture(bool remember) {
     if (m_pendingCaptureId == 0
         || m_inputCapture == nullptr
         || m_sessionLock != nullptr
         || sessionLocked()
-        || (m_session != nullptr && !m_session->active)) {
+        || (m_session != nullptr && !m_session->active)
+        || (remember && (m_quitConfirm == nullptr || !m_quitConfirm->canRememberInputCapture()))) {
       dismissConfirmation();
       return;
     }
     const auto id = std::exchange(m_pendingCaptureId, 0);
     m_quitConfirm->hide();
-    m_inputCapture->authorizeSession(id, true);
+    m_inputCapture->authorizeSession(id, true, remember);
   }
 
   void Server::cancelInputCapture(uint64_t id) {
@@ -1230,7 +1230,9 @@ namespace umbriel {
     }
 
     m_inputCapture = std::make_unique<InputCapture>(*this);
-    m_inputCapture->setAuthorize([this](uint64_t id, std::string_view name) { requestInputCapture(id, name); });
+    m_inputCapture->setAuthorize([this](uint64_t id, std::string_view name, uint32_t persistMode) {
+      requestInputCapture(id, name, persistMode);
+    });
     m_inputCapture->setAuthorizationCancelled([this](uint64_t id) { cancelInputCapture(id); });
     m_inputCapture->setActiveChanged([this](bool active) { inputCaptureStateChanged(active); });
     for (const auto& keyboard : m_keyboards) {
