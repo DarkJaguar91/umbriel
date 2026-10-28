@@ -14,8 +14,8 @@ namespace umbriel {
   class XwaylandUnmanaged;
 
   // One X11 window for its whole lifetime. While it has a wl_surface, an override-redirect window or one typed as a
-  // menu, tooltip, dropdown, or drag icon is an XwaylandUnmanaged, and any other window is a View; a window whose
-  // type or override-redirect flag changes swaps wrappers without changing the Wayland surface's mapped state.
+  // context menu, tooltip, dropdown, or drag icon is an XwaylandUnmanaged, and any other window is a View; a window
+  // whose type or override-redirect flag changes swaps wrappers without changing the Wayland surface's mapped state.
   class XwaylandWindow {
   public:
     XwaylandWindow(Server& server, Xwayland& owner, wlr_xwayland_surface* xsurface);

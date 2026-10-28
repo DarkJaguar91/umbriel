@@ -16,12 +16,12 @@ namespace umbriel {
 
     constexpr Logger kLog("xwayland");
 
-    // The window types of menus, tooltips, dropdowns, and drag icons. A client may leave such a window to the window
-    // manager instead of making it override-redirect, yet it still places the window itself, next to what opened it.
+    // Client-placed context menus, tooltips, dropdowns, and drag icons can omit override-redirect. EWMH MENU describes
+    // a persistent torn-off menu, so it stays managed unless it explicitly requests override-redirect.
     constexpr std::array kPopupWindowTypes{
-        WLR_XWAYLAND_NET_WM_WINDOW_TYPE_MENU,       WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DROPDOWN_MENU,
-        WLR_XWAYLAND_NET_WM_WINDOW_TYPE_POPUP_MENU, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_TOOLTIP,
-        WLR_XWAYLAND_NET_WM_WINDOW_TYPE_COMBO,      WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DND,
+        WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DROPDOWN_MENU, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_POPUP_MENU,
+        WLR_XWAYLAND_NET_WM_WINDOW_TYPE_TOOLTIP,       WLR_XWAYLAND_NET_WM_WINDOW_TYPE_COMBO,
+        WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DND,
     };
 
     bool isPopup(const wlr_xwayland_surface* xsurface) {

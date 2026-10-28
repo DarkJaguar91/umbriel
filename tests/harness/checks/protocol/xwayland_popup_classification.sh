@@ -152,12 +152,12 @@ expect_native_active() {
 }
 
 expect_managed_state() {
-  local label=$1 fullscreen=${2:-false} x y width height
+  local label=$1 fullscreen=${2:-false} type=${3:-normal} x y width height
   read -r x y width height < <(views | jq -r '.[0] | "\(.x) \(.y) \(.w) \(.h)"')
   if [[ $fullscreen == true ]]; then
     x=0 y=0 width=1280 height=720
   fi
-  expect_state "$label" "map=2 override=false type=normal x=$x y=$y w=$width h=$height input=true active=true listed=true stacked=true max_horz=true max_vert=true fullscreen=$fullscreen"
+  expect_state "$label" "map=2 override=false type=$type x=$x y=$y w=$width h=$height input=true active=true listed=true stacked=true max_horz=true max_vert=true fullscreen=$fullscreen"
 }
 
 expect_popup_state() {
@@ -204,6 +204,54 @@ expect_popup_state before false
 expect_view_count 0
 expect_pixels before
 type_key 30
+stop_client
+
+# EWMH MENU denotes a persistent torn-off menu. It stays managed unless OR
+# says otherwise, including when its type arrives before its first map.
+start_client managed-menu
+send 'type menu' map
+expect_managed
+expect_managed_state menu-before false menu
+menu_id=$(views | jq -r '.[0].id')
+type_key 40
+
+# A title event acknowledges each preceding type update on the XWM stream.
+# NORMAL and MENU share a wrapper, so changing between them keeps its ID.
+send 'type normal' 'title xwayland-menu-normal'
+expect_view_title xwayland-menu-normal
+expect_managed_state menu-normal
+send 'type menu' 'title xwayland-menu-restored'
+expect_view_title xwayland-menu-restored
+expect_managed_state menu-same-wrapper false menu
+if [[ $(views | jq -r '.[0].id') != "$menu_id" ]]; then
+  echo 'a normal-to-menu metadata update replaced the managed View'
+  exit 1
+fi
+
+# POPUP_MENU is client-placed. Returning to MENU must map a new managed View
+# from the existing surface without needing an unmap, map or redraw command.
+send 'type popup'
+expect_view_count 0
+expect_popup_state menu-to-popup false
+expect_pixels menu-to-popup
+send 'type menu'
+expect_managed
+expect_managed_state popup-to-menu false menu
+type_key 41
+
+# OR remains authoritative for a window typed MENU. Its saved client geometry
+# returns while OR is set; clearing OR reinstates ordinary managed rules.
+send 'override true'
+expect_view_count 0
+send focus
+expect_popup_state menu-override true menu
+expect_pixels menu-override
+# wlroots does not request seat keyboard focus for an OR MENU window. Its X
+# self-focus is observable above; managed input resumes after OR is cleared.
+send 'override false' 'geometry 240 190 320 180'
+expect_managed
+expect_managed_state menu-override-restored false menu
+type_key 43
 stop_client
 
 start_client late-type

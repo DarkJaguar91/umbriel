@@ -2454,16 +2454,11 @@ namespace umbriel {
     double oldSx = 0;
     double oldSy = 0;
     View* oldView = m_server->viewAt(oldX, oldY, &oldSurface, &oldSx, &oldSy);
-    // A tiled transient can open outside the viewport. Refreshing hover within its ancestor must not undo the
-    // reveal; crossing back into that ancestor still transfers focus.
+    // A transient can open while the pointer remains over its parent. Refreshing hover within that ancestor must
+    // leave the child focused so the pointer can reach it; crossing back into the ancestor still transfers focus.
     bool hoveredAncestor = false;
     const View* focused = View::fromSurface(seat->keyboard_state.focused_surface);
-    if (!scrollRefocus
-        && refocus
-        && view == oldView
-        && focused != nullptr
-        && focused->tiled()
-        && focused->workspace() == workspace) {
+    if (!scrollRefocus && refocus && view == oldView && focused != nullptr && focused->workspace() == workspace) {
       for (const View* parent = focused->transientParent(); parent != nullptr; parent = parent->transientParent()) {
         if (parent == view) {
           hoveredAncestor = true;

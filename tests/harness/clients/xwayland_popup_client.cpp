@@ -22,6 +22,7 @@ namespace {
     xcb_gcontext_t gc = XCB_NONE;
     xcb_atom_t typeProperty = XCB_ATOM_NONE;
     xcb_atom_t normal = XCB_ATOM_NONE;
+    xcb_atom_t menu = XCB_ATOM_NONE;
     xcb_atom_t popup = XCB_ATOM_NONE;
     xcb_atom_t dropdown = XCB_ATOM_NONE;
     xcb_atom_t clients = XCB_ATOM_NONE;
@@ -156,6 +157,7 @@ namespace {
         std::memcpy(&atom, xcb_get_property_value(type), sizeof(atom));
       }
       const char* typeName = atom == state.normal ? "normal"
+          : atom == state.menu                    ? "menu"
           : atom == state.popup                   ? "popup"
           : atom == state.dropdown                ? "dropdown"
                                                   : "none";
@@ -195,6 +197,7 @@ namespace {
     } else if (line.starts_with("type ")) {
       const std::string_view name = line.substr(5);
       const xcb_atom_t type = name == "normal" ? state.normal
+          : name == "menu"                     ? state.menu
           : name == "popup"                    ? state.popup
           : name == "dropdown"                 ? state.dropdown
                                                : xcb_atom_t{XCB_ATOM_NONE};
@@ -359,6 +362,7 @@ int main(int argc, char** argv) {
   state.screen = xcb_setup_roots_iterator(xcb_get_setup(state.connection)).data;
   state.typeProperty = internAtom(state, "_NET_WM_WINDOW_TYPE");
   state.normal = internAtom(state, "_NET_WM_WINDOW_TYPE_NORMAL");
+  state.menu = internAtom(state, "_NET_WM_WINDOW_TYPE_MENU");
   state.popup = internAtom(state, "_NET_WM_WINDOW_TYPE_POPUP_MENU");
   state.dropdown = internAtom(state, "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU");
   state.clients = internAtom(state, "_NET_CLIENT_LIST");
