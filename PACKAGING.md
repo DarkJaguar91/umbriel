@@ -67,7 +67,7 @@ The archive is linked as a whole so its internal utility symbols survive distrib
 - wayland-server 1.24 or newer, plus the Wayland client library
 - wayland-protocols 1.47 or newer
 - libxkbcommon 1.10.0 or newer (pkg-config: `xkbcommon`), required for server-side keyboard lock and latch updates
-- libinput 1.27 or newer
+- libinput 1.29 or newer
 - libeis 1.3 or newer (provided by libei)
 - libudev, required for native `[drm]` GPU exclusion support
 - libsystemd 243 or newer, required to read the systemd-localed keymap for keyboards with no XKB configuration

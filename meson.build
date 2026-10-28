@@ -117,7 +117,7 @@ if is_glibc
 endif
 
 xkbcommon_dep = dependency('xkbcommon', version: '>=1.10.0')
-libinput_dep = dependency('libinput', version: '>=1.27')
+libinput_dep = dependency('libinput', version: '>=1.29')
 libeis_dep = dependency('libeis-1.0', version: '>=1.3')
 pixman_dep = dependency('pixman-1', version: '>=0.43.0')
 tomlplusplus_dep = dependency('tomlplusplus')
